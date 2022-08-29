@@ -1,15 +1,16 @@
 import discord
 import os
-import requests
+#import requests
 import json
 import feedparser
 
 client = discord.Client()
 
-def get_quote():
-  response = requests.get("https://zenquotes.io/api/random")
-  json_data = json.loads(response.text)
-  quote = json_data[0]['q'] + " -" + json_data[0]['a']
+#def get_quote():
+#  response = requests.get("https://zenquotes.io/api/random")
+#  json_data = json.loads(response.text)
+#  quote = json_data[0]['q'] + " -" + json_data[0]['a']
+  quote = "Requests not working, just giving static quote --Render"
   return(quote)
 
 def get_rss():
