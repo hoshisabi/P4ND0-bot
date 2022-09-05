@@ -84,7 +84,7 @@ async def roll(ctx, dice: str):
     print(f"Dice result: {result}")
     await ctx.send(embed=embed)
 
-with open("env.txt") as fd:
+with open(".env") as fd:
     token = fd.readline()
 
 bot.run(token)
