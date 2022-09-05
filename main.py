@@ -4,20 +4,15 @@ import requests
 import json
 import feedparser
 
-client = discord.Client()
+intents = discord.Intents.default()
+intents.message_content = True
 
-def get_quote():
-  response = requests.get("https://zenquotes.io/api/random")
-  json_data = json.loads(response.text)
-  quote = json_data[0]['q'] + " -" + json_data[0]['a']
-  quote = "Requests not working, just giving static quote --Render"
-  return(quote)
+client = discord.Client(intents = intents)
 
-def get_rss():
-  rss = feedparser.parse("https://warhorn.net/events/pandodnd/schedule/Ya7RynA9U_XsaE_Ve6Ht.atom")  
-  list = [(x.title,x.link) for x in rss.entries]
-  print(list)
-  return list
+#@client.command()
+#async def embed(ctx):
+#  embed=discord.Embed(title="Testing", url="http://hoshisabi.com", description="This is a test")
+#  await ctx.send(embed=embed)
 
 @client.event
 async def on_ready():
@@ -37,5 +32,19 @@ async def on_message(message):
     rss = get_rss()
     print(rss)
     await message.channel.send(rss)
+
+
+def get_quote():
+  response = requests.get("https://zenquotes.io/api/random")
+  json_data = json.loads(response.text)
+  quote = json_data[0]['q'] + " -" + json_data[0]['a']
+  return(quote)
+
+def get_rss():
+  rss = feedparser.parse("https://warhorn.net/events/pandodnd/schedule/Ya7RynA9U_XsaE_Ve6Ht.atom")
+  #list = [(x.title,x.link) for x in rss.entries]
+  list = [f"{x.title}: {x.link}" for x in rss.entries]
+  print(list)
+  return list
 
 client.run(os.getenv('TOKEN'))
