@@ -8,19 +8,79 @@ import discord
 import feedparser
 import markdownify
 import requests
-import pickle
-import bz2
+from mysql.connector import Error
 from discord.ext import commands
 from dotenv import load_dotenv
+import mysql.connector
 
 load_dotenv()
 
-with bz2.open('characters.bz', 'rb') as f:
-   characters = pickle.load(f)
+discord_token = os.getenv("DISCORD_TOKEN")
+dbhost = os.getenv("DATABASE_HOST")
+dbuser = os.getenv("DATABASE_USER")
+dbpass = os.getenv("DATABASE_PASS")
+dbname = os.getenv("DATABASE_NAME")
+characters = {}
 
 
+def save_characters():
+    try:
+        cnx = mysql.connector.connect(host=dbhost,
+                                      database=dbname,
+                                      user=dbuser,
+                                      password=dbpass)
+        if cnx.is_connected():
+            dbinfo = cnx.get_server_info()
+            print(f"Connected to server: {dbinfo}")
 
-def to_discordtimestamp(incoming_time):
+        cursor = cnx.cursor()
+        insert_sql = "INSERT INTO characters (discord_id, character_url) VALUES (%s, %s);"
+        delete_sql = "delete from characters where discord_id = %s"
+
+        for (discord_id, url_set) in characters.items():
+            cursor.execute(delete_sql, tuple(character))
+            for url in url_set:
+                cursor.execute(insert_sql, tuple(discord_id, url))
+
+    except Error as e:
+        print("Error connecting to db", e)
+    finally:
+        if cnx.is_connected():
+            cursor.close()
+            cnx.close()
+            print("closed connection to db")
+
+
+def load_characters():
+    try:
+        cnx = mysql.connector.connect(host=dbhost,
+                                      database=dbname,
+                                      user=dbuser,
+                                      password=dbpass)
+        if cnx.is_connected():
+            dbinfo = cnx.get_server_info()
+            print(f"Connected to server: {dbinfo}")
+
+        cursor = cnx.cursor()
+        sql = "select discord_id, character_url from characters"
+        cursor.execute(sql)
+
+        for (discord_id, url) in cursor:
+            mychars = characters.setdefault(discord_id, set())
+            mychars.add(url)
+
+        cnx.commit()
+
+    except Error as e:
+        print("Error connecting to db", e)
+    finally:
+        if cnx.is_connected():
+            cursor.close()
+            cnx.close()
+            print("closed connection to db")
+
+
+def to_discord_timestamp(incoming_time):
     return int(datetime.fromisoformat(incoming_time).timestamp())
 
 
@@ -43,15 +103,20 @@ async def on_ready():
 
 
 @bot.hybrid_command()
-async def character(ctx, url: str, user: discord.User = commands.parameter(default=lambda ctx: ctx.author)):
+async def character(ctx, url: str = None, user: discord.User = commands.parameter(default=lambda ctx: ctx.author)):
     name = f"{user.name}#{user.discriminator}"
-    await ctx.send(f"Showing {url} and {name}")
     mychars = characters.setdefault(name, set())
-    mychars.add(url)
-    print(characters)
-
-    with bz2.open('characters.bz', 'wb') as f:
-        pickle.dump(characters, f)
+    if url:
+        mychars.add(url)
+        save_characters()
+        await ctx.send(f"Saving {url} for {name}.")
+        print(characters)
+    else:
+        desc_text = f"The following characters belong to {name}:\n"
+        for mychar in mychars:
+            desc_text += f"\t{mychar}\n"
+        await ctx.send(desc_text)
+        print(desc_text)
 
     await ctx.send(characters)
 
@@ -85,7 +150,7 @@ async def rss(ctx, arg: typing.Optional[bool]):
     print(rss_feed)
     desc_text = f"The following games are upcoming on this server, click on a link to schedule a seat.\n"
     for x in rss_feed.entries:
-        desc_text += f"  * [{x.title}]({x.link}) <t:{to_discordtimestamp(x.gd_when['starttime'])}>"
+        desc_text += f"  * [{x.title}]({x.link}) <t:{to_discord_timestamp(x.gd_when['starttime'])}>"
         if arg:
             mdif = markdownify.markdownify(x.summary)
             lines = mdif.splitlines()
@@ -112,5 +177,5 @@ async def roll(ctx, dice: str):
     await ctx.send(embed=embed)
 
 
-token = os.getenv("DISCORD_TOKEN")
-bot.run(token)
+load_characters()
+bot.run(discord_token)

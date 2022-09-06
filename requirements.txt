@@ -5,3 +5,4 @@ markdownify
 python-dotenv
 google-auth-httplib2
 google-auth-oauthlib
+mysql-connector-python
