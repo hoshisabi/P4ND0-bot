@@ -2,3 +2,6 @@ discord.py
 requests
 feedparser
 markdownify
+python-dotenv
+google-auth-httplib2
+google-auth-oauthlib

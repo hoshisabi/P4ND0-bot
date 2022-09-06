@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import typing
 from datetime import datetime
@@ -7,7 +8,16 @@ import discord
 import feedparser
 import markdownify
 import requests
+import pickle
+import bz2
 from discord.ext import commands
+from dotenv import load_dotenv
+
+load_dotenv()
+
+with bz2.open('characters.bz', 'rb') as f:
+   characters = pickle.load(f)
+
 
 
 def to_discordtimestamp(incoming_time):
@@ -30,6 +40,20 @@ bot = commands.Bot(command_prefix='$', description=description, intents=intents)
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
+
+
+@bot.hybrid_command()
+async def character(ctx, url: str, user: discord.User = commands.parameter(default=lambda ctx: ctx.author)):
+    name = f"{user.name}#{user.discriminator}"
+    await ctx.send(f"Showing {url} and {name}")
+    mychars = characters.setdefault(name, set())
+    mychars.add(url)
+    print(characters)
+
+    with bz2.open('characters.bz', 'wb') as f:
+        pickle.dump(characters, f)
+
+    await ctx.send(characters)
 
 
 @bot.command()
@@ -62,7 +86,10 @@ async def rss(ctx, arg: typing.Optional[bool]):
     desc_text = f"The following games are upcoming on this server, click on a link to schedule a seat.\n"
     for x in rss_feed.entries:
         desc_text += f"  * [{x.title}]({x.link}) <t:{to_discordtimestamp(x.gd_when['starttime'])}>"
-        if (arg): desc_text += f"\n>{markdownify.markdownify(x.summary)}"
+        if arg:
+            mdif = markdownify.markdownify(x.summary)
+            lines = mdif.splitlines()
+            desc_text += "\n>".join([line for line in lines if line.strip()])
         desc_text += "\n"
     embed = discord.Embed(title="Schedule", type="rich", description=desc_text, color=discord.Color.green())
 
@@ -84,7 +111,6 @@ async def roll(ctx, dice: str):
     print(f"Dice result: {result}")
     await ctx.send(embed=embed)
 
-with open(".env") as fd:
-    token = fd.readline()
 
+token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
