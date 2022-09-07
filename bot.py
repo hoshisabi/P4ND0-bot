@@ -108,7 +108,7 @@ async def character(ctx, url: str = None, user: discord.User = commands.paramete
     mychars = characters.setdefault(name, set())
     if url:
         mychars.add(url)
-        save_characters()
+#        save_characters()
         await ctx.send(f"Saving {url} for {name}.")
         print(characters)
     else:
@@ -177,5 +177,5 @@ async def roll(ctx, dice: str):
     await ctx.send(embed=embed)
 
 
-load_characters()
+#load_characters()
 bot.run(discord_token)
