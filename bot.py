@@ -13,14 +13,18 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import mysql.connector
 
-load_dotenv()
+description = '''
+A placeholder bot for the P4ND0 server, much more will eventually be here
+but right now, it's just a very basic thing. Look for more capabilities later!
+'''
 
-discord_token = os.getenv("DISCORD_TOKEN")
-dbhost = os.getenv("DATABASE_HOST")
-dbuser = os.getenv("DATABASE_USER")
-dbpass = os.getenv("DATABASE_PASS")
-dbname = os.getenv("DATABASE_NAME")
-characters = {}
+last_message_update = None
+
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+
+bot = commands.Bot(command_prefix='$', description=description, intents=intents)
 
 
 def save_characters():
@@ -84,22 +88,17 @@ def to_discord_timestamp(incoming_time):
     return int(datetime.fromisoformat(incoming_time).timestamp())
 
 
-description = '''
-A placeholder bot for the P4ND0 server, much more will eventually be here
-but right now, it's just a very basic thing. Look for more capabilities later!
-'''
-
-intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
-
-bot = commands.Bot(command_prefix='$', description=description, intents=intents)
-
-
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
+
+
+@bot.event
+async def on_message(message):
+    await bot.process_commands(message)
+    if message.author != bot.user and message.content.startswith("ping"):
+        await message.channel.send(f"You said: '{message.content}'")
 
 
 @bot.hybrid_command()
@@ -108,7 +107,7 @@ async def character(ctx, url: str = None, user: discord.User = commands.paramete
     mychars = characters.setdefault(name, set())
     if url:
         mychars.add(url)
-#        save_characters()
+        save_characters()
         await ctx.send(f"Saving {url} for {name}.")
         print(characters)
     else:
@@ -177,5 +176,14 @@ async def roll(ctx, dice: str):
     await ctx.send(embed=embed)
 
 
-#load_characters()
+load_dotenv()
+
+discord_token = os.getenv("DISCORD_TOKEN")
+dbhost = os.getenv("DATABASE_HOST")
+dbuser = os.getenv("DATABASE_USER")
+dbpass = os.getenv("DATABASE_PASS")
+dbname = os.getenv("DATABASE_NAME")
+characters = {}
+
+# load_characters()
 bot.run(discord_token)
