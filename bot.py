@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import random
@@ -18,7 +19,7 @@ A placeholder bot for the P4ND0 server, much more will eventually be here
 but right now, it's just a very basic thing. Look for more capabilities later!
 '''
 
-last_message_update = None
+watched_channels = {}
 
 intents = discord.Intents.default()
 intents.members = True
@@ -94,11 +95,21 @@ async def on_ready():
     print('------')
 
 
+def get_key_from_message(message):
+    return f"{message.guild}:{message.channel}"
+
+
 @bot.event
 async def on_message(message):
     await bot.process_commands(message)
-    if message.author != bot.user and message.content.startswith("ping"):
-        await message.channel.send(f"You said: '{message.content}'")
+    if message.author != bot.user:
+        key = get_key_from_message(message)
+        if schedule_message := watched_channels[key]:
+            await schedule_message.delete()
+            watched_channels[key] = await message.channel.send(embed=get_rss_embed(False))
+            print("Updated channel with new events")
+        else:
+            await message.channel.send("Did not find scheduled message to edit.")
 
 
 @bot.hybrid_command()
@@ -141,24 +152,37 @@ async def quote(ctx):
 
 
 @bot.command()
-async def rss(ctx, arg: typing.Optional[bool]):
-    """Pulls the most recent schedule of upcoming events from Warhorn displayed in local time
-    Pass "True" to get full details of event. """
-    print(arg)
+async def watch(ctx):
+    """Watch a channel to ensure that the schedule is always the most recent message"""
+    embed = get_rss_embed(False)
+    message = await ctx.send(embed=embed)
+    key = get_key_from_message(message)
+    watched_channels[key] = message
+    print(f"Set to watch channel {message.channel}: {watched_channels}")
+
+
+def get_rss_embed(full: bool):
+    desc_text = f"The following games are upcoming on this server, click on a link to schedule a seat.\n"
     rss_feed = feedparser.parse("https://warhorn.net/events/pandodnd/schedule/Ya7RynA9U_XsaE_Ve6Ht.atom")
     print(rss_feed)
-    desc_text = f"The following games are upcoming on this server, click on a link to schedule a seat.\n"
     for x in rss_feed.entries:
         desc_text += f"  * [{x.title}]({x.link}) <t:{to_discord_timestamp(x.gd_when['starttime'])}>"
-        if arg:
+        if full:
             mdif = markdownify.markdownify(x.summary)
             lines = mdif.splitlines()
             desc_text += "\n>".join([line for line in lines if line.strip()])
         desc_text += "\n"
-    embed = discord.Embed(title="Schedule", type="rich", description=desc_text, color=discord.Color.green())
+    print(f"Generated embed:\n{desc_text}")
+    return discord.Embed(title="Schedule", type="rich", description=desc_text, color=discord.Color.green())
 
-    print(f"Printed out schedule:\n{desc_text}")
-    await ctx.send(embed=embed)
+
+@bot.command()
+async def rss(ctx, arg: typing.Optional[bool]):
+    """Pulls the most recent schedule of upcoming events from Warhorn displayed in local time
+    Pass "True" to get full details of event. """
+    print(arg)
+    embed = get_rss_embed(arg)
+    return await ctx.send(embed=embed)
 
 
 @bot.command()
