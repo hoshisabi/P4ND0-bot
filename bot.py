@@ -162,11 +162,11 @@ async def watch(ctx):
 
 
 def get_rss_embed(full: bool):
-    desc_text = f"The following games are upcoming on this server, click on a link to schedule a seat.\n"
-    rss_feed = feedparser.parse("https://warhorn.net/events/pandodnd/schedule/Ya7RynA9U_XsaE_Ve6Ht.atom")
+    desc_text = f"The following games are upcoming on this server, click on a link to schedule a seat.\n\n"
+    rss_feed = feedparser.parse(rssfeed)
     print(rss_feed)
     for x in rss_feed.entries:
-        desc_text += f"  * [{x.title}]({x.link}) <t:{to_discord_timestamp(x.gd_when['starttime'])}>"
+        desc_text += f"* [{x.title}]({x.link}) <t:{to_discord_timestamp(x.gd_when['starttime'])}>"
         if full:
             mdif = markdownify.markdownify(x.summary)
             lines = mdif.splitlines()
@@ -207,6 +207,7 @@ dbhost = os.getenv("DATABASE_HOST")
 dbuser = os.getenv("DATABASE_USER")
 dbpass = os.getenv("DATABASE_PASS")
 dbname = os.getenv("DATABASE_NAME")
+rssfeed = os.getenv("FEED_URL")
 characters = {}
 
 # load_characters()
