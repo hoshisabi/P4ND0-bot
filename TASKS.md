@@ -34,7 +34,15 @@
     * Further enhance the bot's ability to recover gracefully on startup (e.g., better handling of deleted messages/channels when loading `watched_schedules`).
     * Ensure all data is saved reliably upon bot shutdown.
 - [ ] This message on startup should probably print better info, not just the numeric info.  (Channel name at least, perhaps also a date time stamp?)
-    >  Successfully fetched watched message 1396746335851515996 in channel 1016232161264807987.
+    > Successfully fetched watched message 1396746335851515996 in channel 1016232161264807987.  
     > Successfully fetched watched message 1396746546216828991 in channel 688166777347506272.
 - [ ] We could watch other warhorn sites with this if we pass in the slug, perhaps $watch (slug) could be used.  Should also
       be able to derive the slug from the URL, if the user passes in the URL
+- [ ] **Automate Session Log Generation:** Implement a new parameterized slash command (e.g., `/logsession`) within the Discord bot to create and post session logs.
+    * **Parameters:** `adventure_name`, `gold_reward`, `streaming_hours`, `items_received`.
+    * **Message Format:**
+        * `[Adventure Name], [Gold Reward]gp each, [Streaming Hours] hours streaming, level if you want it, 10 downtime days, [Items Received]`
+    * **Actions:**
+        1.  Send the formatted message to the `#session_logs` channel.
+        2.  Retrieve the Message ID of the sent log.
+        3.  Send a link to that message in the `#dan_text` channel.      
