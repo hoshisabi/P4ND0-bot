@@ -11,6 +11,7 @@ import markdownify
 import requests
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
+import asyncio
 
 # Import the WarhornClient and API constants from your warhorn_api.py file
 from warhorn_api import WarhornClient, WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN
@@ -171,10 +172,9 @@ def load_watched_schedules():
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
-    load_characters() # Load characters on startup
-    load_watched_schedules() # Load watched schedules on startup
-    update_warhorn_schedule.start() # Start the scheduled task
-
+    load_characters()
+    load_watched_schedules()
+    update_warhorn_schedule.start()
 
 @bot.event
 async def on_message(message):
@@ -313,7 +313,7 @@ async def update_warhorn_schedule():
     if not watched_schedules:
         print("No channels are being watched for schedules.")
         return
-
+    
     for channel_id, info in list(watched_schedules.items()):
         message_id = info["message_id"]
         last_sessions_data = info["last_sessions_data"]
@@ -357,6 +357,7 @@ async def update_warhorn_schedule():
 async def before_update_warhorn_schedule():
     await bot.wait_until_ready()
     print("Warhorn schedule update loop ready to start.")
-
+    await asyncio.sleep(5) # <--- ADD THIS LINE (5-10 seconds is usually sufficient)
+    print("Finished initial delay for cache.") # Added for debug clarity
 
 bot.run(discord_token)
