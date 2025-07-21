@@ -247,15 +247,20 @@ async def get_warhorn_embed_and_data(full: bool):
             else:
                 players_list_str = "No players signed up"
 
+            waitlist_names = []
+            if session.get("playerWaitlistEntries"): # Check if the key exists and is not empty
+                for entry in session["playerWaitlistEntries"]:
+                    if entry.get("user") and entry["user"].get("name"):
+                        waitlist_names.append(entry["user"]["name"])
+
             status_line = ""
+                
             if available_seats > 0:
-                status_line = f"• **Available:** {available_seats} empty slots"
-            elif max_players is not None and max_players > 0:
-                status_line = "• **Available:** 0 empty slots"
-            elif max_players is None and available_seats == 0:
-                status_line = "• **Available:** 0 empty slots"
+                status_line = f"* **Available:** {available_seats} empty slots"
+            elif waitlist_names is not None:
+                status_line = "* **Waitlist:** " + ", ".join(waitlist_names)
             else:
-                status_line = "• **Available:** Unknown slots" 
+                status_line = "* **Available:** Unknown slots" 
 
 
             # Convert to Unix timestamp for Discord's specialized time handling
@@ -267,9 +272,9 @@ async def get_warhorn_embed_and_data(full: bool):
 
             # Constructing the session block based on image_b772da.png and user's specific feedback
             session_block = f"**[{session_name}]({warhorn_url})**\n"
-            session_block += f"• **When:** {time_str}\n"
-            session_block += f"• **GM:** {gm_name}\n"
-            session_block += f"• **Players:** {players_list_str}\n"
+            session_block += f"* **When:** {time_str}\n"
+            session_block += f"* **GM:** {gm_name}\n"
+            session_block += f"* **Players:** {players_list_str}\n"
             session_block += f"{status_line}\n" 
             
             session_block += "\n" 

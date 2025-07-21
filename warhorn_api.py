@@ -31,6 +31,11 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
           name
         }
       }
+      playerWaitlistEntries {
+        user {
+          name
+        }
+      }
       scenario {
         name
         gameSystem {
