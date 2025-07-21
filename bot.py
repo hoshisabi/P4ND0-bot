@@ -258,7 +258,7 @@ async def get_warhorn_embed_and_data(full: bool):
             if available_seats > 0:
                 status_line = f"* **Status:** {available_seats} slots available!"
             elif waitlist_names: # Checks if the list 'waitlist_names' is not empty
-                status_line = f"* **Status:** On waitlist: {', '.join(waitlist_names)}"
+                status_line = f"* **Waitlist:** {', '.join(waitlist_names)}"
             else:
                 # This branch means available_seats is 0 AND waitlist_names is empty
                 status_line = "* **Status:** Full (no waitlist)"
