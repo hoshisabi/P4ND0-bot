@@ -9,8 +9,7 @@ load_dotenv()
 WARHORN_APPLICATION_TOKEN = os.getenv("WARHORN_APPLICATION_TOKEN")
 WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
 
-# Corrected event_sessions_query to use startsAfter and ISO8601DateTime
-# MODIFIED: Added 'links { url name }' selection
+# Final event_sessions_query including the 'uuid' field
 event_sessions_query = """
 query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
   eventSessions(events: $events, startsAfter: $startsAfter) {
@@ -21,6 +20,7 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
       location
       maxPlayers
       availablePlayerSeats
+      uuid # ADDED: Requesting the UUID field
       gmSignups {
         user {
           name
@@ -36,10 +36,6 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
         gameSystem {
           name
         }
-      }
-      links { # NEW: Request links directly
-        url
-        name
       }
     }
   }
@@ -75,8 +71,6 @@ class WarhornClient:
     def get_event_sessions(self, event_slug):
         current_utc_time = datetime.now(timezone.utc).isoformat()
         return self.run_query(event_sessions_query, variables={"events": [event_slug], "startsAfter": current_utc_time})
-
-    # REMOVED: get_single_event_session method as it's no longer needed
 
 if __name__ == "__main__":
     client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)

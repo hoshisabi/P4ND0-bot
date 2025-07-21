@@ -183,48 +183,39 @@ async def on_ready():
 
 
 # --- get_warhorn_embed helper function ---
-async def get_warhorn_embed_and_data(full: bool): # Changed to async
+async def get_warhorn_embed_and_data(full: bool): 
     desc_text = """The following games are upcoming on this server, click on a link to schedule a seat.
 
 """
     pandodnd_slug = "pandodnd"
     try:
-        # Get all session data, including links, in a single call
+        # Get all session data, including uuid
         initial_result = warhorn_client.get_event_sessions(pandodnd_slug)
 
         if "data" not in initial_result or "eventSessions" not in initial_result["data"] or "nodes" not in initial_result["data"]["eventSessions"]:
             print("Unexpected Warhorn API response structure or no data from initial fetch.")
             return discord.Embed(title="Schedule Error", description="Could not retrieve schedule from Warhorn. Please try again later.", color=discord.Color.red()), []
 
-        # The initial_sessions_data now contains the 'links' directly
         sessions_to_display = sorted(
             initial_result["data"]["eventSessions"]["nodes"],
             key=lambda x: datetime.fromisoformat(x["startsAt"].replace("Z", "+00:00"))
         )
-
-        # Removed all diagnostic print statements and detailed_sessions_data logic
 
         if not sessions_to_display:
             embed = discord.Embed(title="Upcoming Warhorn Events", description="No upcoming sessions found.", color=discord.Color.blue())
             return embed, sessions_to_display
 
 
-        for session in sessions_to_display: # Iterate over the now-complete session data
+        for session in sessions_to_display: 
             session_name = session["name"]
             
-            warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule" # Default to main schedule link
-            if session.get("links"):
-                # Prioritize links that don't have a specific 'name' (often the main session link)
-                # or look for a name indicating the primary session link
-                main_link = next((link["url"] for link in session["links"] if not link.get("name")), None)
-                if not main_link: # If no unnamed link, try to find one with a typical session name
-                    main_link = next((link["url"] for link in session["links"] if "session" in link.get("name", "").lower() or "details" in link.get("name", "").lower()), None)
-                if main_link:
-                    warhorn_url = main_link
-                elif session["links"]: # Fallback to the first link if no primary identified
-                    warhorn_url = session["links"][0]["url"]
-
-
+            # MODIFIED: Construct warhorn_url using the 'uuid'
+            session_uuid = session.get("uuid")
+            if session_uuid:
+                warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule/sessions/{session_uuid}"
+            else:
+                warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule" # Fallback to main schedule link if UUID is missing
+            
             session_start_str = session["startsAt"]
             session_location = session["location"] 
             scenario_name = session["scenario"]["name"] if session["scenario"] else "N/A"
@@ -291,7 +282,7 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async
             color=discord.Color.blue(),
             url=f"https://warhorn.net/events/{pandodnd_slug}/schedule"
         )
-        return embed, sessions_to_display # Return the sessions data that was actually used
+        return embed, sessions_to_display 
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching Warhorn schedule: {e}")
