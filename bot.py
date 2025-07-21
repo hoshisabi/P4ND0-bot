@@ -281,7 +281,7 @@ async def get_warhorn_embed_and_data(full: bool):
 
             desc_text += session_block # This line appends to desc_text
 
-        desc_ext += "\nJoin the waitlist to be next in line if there is a cancellation. Those on the waitlist frequently get a seat.\n"
+        desc_text += "\n*Join the waitlist to be next in line if there is a cancellation. Those on the waitlist frequently get a seat.*\n"
         embed = discord.Embed(
             title="Upcoming Warhorn Events",
             description=desc_text, # This is the final description
