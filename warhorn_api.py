@@ -9,7 +9,6 @@ load_dotenv()
 WARHORN_APPLICATION_TOKEN = os.getenv("WARHORN_APPLICATION_TOKEN")
 WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
 
-# Corrected event_sessions_query to use startsAfter and ISO8601DateTime
 event_sessions_query = """
 query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
   eventSessions(events: $events, startsAfter: $startsAfter) {
@@ -23,11 +22,23 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
       gmSignups {
         user {
           name
+          # discordUser { # This field caused the error
+          #   id
+          #   username
+          #   discriminator
+          #   tag
+          # }
         }
       }
       playerSignups {
         user {
           name
+          # discordUser { # This field caused the error
+          #   id
+          #   username
+          #   discriminator
+          #   tag
+          # }
         }
       }
       scenario {
@@ -81,5 +92,3 @@ if __name__ == "__main__":
         print(json.dumps(sessions, indent=2))
     except requests.exceptions.RequestException as e:
         print(f"Error fetching event sessions: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")

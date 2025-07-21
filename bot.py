@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 import asyncio
 
 import discord
-import requests
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
@@ -220,7 +219,43 @@ def get_warhorn_embed_and_data(full: bool):
             max_players = session["maxPlayers"]
             available_seats = session["availablePlayerSeats"]
             gm_name = session["gmSignups"][0]["user"]["name"] if session["gmSignups"] else "No GM"
-            players_signed_up = len(session["playerSignups"])
+            
+            # --- Player List Logic: Now parsing names for embedded Discord tags ---
+            parsed_player_names = []
+            for signup in session["playerSignups"]:
+                full_player_name = signup["user"]["name"]
+                # Regex to match "DiscordTag (Real Name)" or just "Name"
+                match = re.match(r"^(.*?)(?:\s*\((.*)\))?$", full_player_name)
+                if match:
+                    # group(1) captures "DiscordTag" or the whole name if no parentheses
+                    # group(2) captures "Real Name" if parentheses exist
+                    discord_tag_or_primary_name = match.group(1).strip()
+                    real_name_in_parentheses = match.group(2)
+
+                    if real_name_in_parentheses:
+                        # Format as "Real Name (DiscordTag)"
+                        parsed_player_names.append(f"{real_name_in_parentheses} ({discord_tag_or_primary_name})")
+                    else:
+                        # No parentheses, use the name as is
+                        parsed_player_names.append(discord_tag_or_primary_name)
+                else:
+                    # Fallback if regex doesn't match for any reason
+                    parsed_player_names.append(full_player_name)
+
+            if parsed_player_names:
+                players_list_str = ", ".join(parsed_player_names)
+            else:
+                players_list_str = "No players signed up"
+
+            # Determine empty slots wording
+            empty_slots_str = ""
+            if available_seats > 0:
+                empty_slots_str = f" ({available_seats} empty slots)"
+            elif available_seats == 0 and max_players is not None and max_players > 0: # If max_players is also 0 or None, it means unlimited or not set, so don't show "0 empty slots"
+                empty_slots_str = " (0 empty slots)"
+            elif max_players is None and available_seats == 0: # Handle cases where max_players is null/none, but there are no available seats
+                empty_slots_str = " (0 empty slots)"
+
 
             # Convert to Unix timestamp for Discord's specialized time handling
             utc_dt = datetime.fromisoformat(session_start_str.replace("Z", "+00:00"))
@@ -231,11 +266,11 @@ def get_warhorn_embed_and_data(full: bool):
 
             warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule/sessions/{session_id}"
 
-            # Constructing the session block based on image_b772da.png
+            # Constructing the session block based on image_b772da.png and user's specific feedback
             session_block = f"**[{session_name}]({warhorn_url})**\n"
             session_block += f"• **When:** {time_str}\n"
             session_block += f"• **GM:** {gm_name}\n"
-            session_block += f"• **Players:** {players_signed_up}/{max_players} ({available_seats} seats left)\n"
+            session_block += f"• **Players:** {players_list_str}{empty_slots_str}\n" # Updated player line
             
             session_block += "\n" # Add a newline to separate sessions
 
@@ -353,3 +388,196 @@ async def character(ctx, character_url: typing.Optional[str] = None):
             description_parts.append(f"• [{char_name}]({char_url})")
 
         embed.description = "\n".join(description_parts)
+        embed.set_footer(text="Click on a character name to view it on D&D Beyond.")
+        await ctx.send(embed=embed)
+
+
+@bot.command()
+async def schedule(ctx, full: typing.Optional[bool] = False):
+    """Pulls the most recent schedule of upcoming events from Warhorn displayed in your local time."""
+    embed_to_send, _ = get_warhorn_embed_and_data(full)
+
+    if embed_to_send.color == discord.Color.red():
+        await ctx.send(embed=embed_to_send)
+        return
+    await ctx.send(embed=embed_to_send)
+
+
+@bot.command()
+async def quote(ctx):
+    """Generate a random quote (no parameters)"""
+    response = requests.get("https://zenquotes.io/api/random")
+    json_data = json.loads(response.text)
+    quote = f"{json_data[0]['q']}\n\t-*{json_data[0]['a']}*\n"
+    print(quote)
+    embed = discord.Embed(title="Quote", color=discord.Color.blue())
+    embed.description = quote
+    embed.set_author(name="zenquotes.io", url="https://zenquotes.io/")
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+async def watch(ctx):
+    """Watches this channel for Warhorn schedule updates, ensuring the schedule message is always the most recent."""
+    embed_to_send, sessions_data = get_warhorn_embed_and_data(False)
+
+    if embed_to_send.color == discord.Color.red():
+        await ctx.send(embed=embed_to_send)
+        return
+
+    channel_id = ctx.channel.id
+    old_message_object = watched_schedules.get(channel_id)
+    
+    if old_message_object and isinstance(old_message_object, discord.Message):
+        try:
+            await old_message_object.delete()
+            print(f"Deleted old schedule message {old_message_object.id} in channel {ctx.channel.name} before setting new watch.")
+        except discord.NotFound:
+            print(f"Old schedule message {old_message_object.id} for {ctx.channel.name} not found on delete attempt, proceeding.")
+        except discord.Forbidden:
+            print(f"Bot lacks permissions to delete old message {old_message_object.id} in {ctx.channel.name}.")
+            await ctx.send("Warning: I couldn't delete the previous schedule message. Please ensure I have 'Manage Messages' permission.")
+        except Exception as e:
+            print(f"Error handling old message {old_message_object.id} in watched channel {ctx.channel.name}: {e}")
+
+    message = await ctx.send(embed=embed_to_send)
+    
+    watched_schedules[channel_id] = message
+    last_warhorn_sessions_data[channel_id] = sessions_data 
+
+    save_watched_schedules()
+    save_last_warhorn_sessions_data()
+
+    print(f"Set to watch channel {ctx.channel.name} ({channel_id}) with message ID {message.id}.")
+    await ctx.send(f"This channel is now being watched for Warhorn schedule updates. I will keep the schedule at the bottom of the channel.")
+
+
+@bot.command()
+async def unwatch(ctx):
+    """Stops watching this channel for Warhorn schedule updates and deletes the message."""
+    channel_id = ctx.channel.id
+    if channel_id in watched_schedules:
+        message_object = watched_schedules.pop(channel_id)
+        last_warhorn_sessions_data.pop(channel_id, None)
+
+        try:
+            if isinstance(message_object, discord.Message):
+                await message_object.delete()
+                print(f"Deleted schedule message {message_object.id} in {ctx.channel.name} and unwatched.")
+            else:
+                print(f"Unwatched channel {ctx.channel.name} but no message object to delete (was likely from initial load).")
+            
+            await ctx.send(f"This channel is no longer being watched for Warhorn schedule updates.")
+            save_watched_schedules()
+            save_last_warhorn_sessions_data()
+        except discord.NotFound:
+            print(f"Message not found when trying to delete for unwatch in {ctx.channel.name} ({channel_id}). Already gone?")
+            await ctx.send(f"This channel is no longer being watched, but I couldn't find the message to delete (it might have been deleted manually).")
+            save_watched_schedules()
+            save_last_warhorn_sessions_data()
+        except discord.Forbidden:
+            print(f"Bot lacks permissions to delete message in {ctx.channel.name} ({channel_id}).")
+            await ctx.send(f"This channel is no longer being watched, but I couldn't delete the message. Please delete it manually.")
+            save_watched_schedules()
+            save_last_warhorn_sessions_data()
+        except Exception as e:
+            await ctx.send(f"An error occurred while unwatching: {e}")
+            print(f"Error unwatching channel {ctx.channel.name} ({channel_id}): {e}")
+    else:
+        await ctx.send("This channel is not currently being watched.")
+
+
+@bot.command()
+async def roll(ctx, dice: str):
+    """Rolls a dice in NdN format."""
+    try:
+        rolls, limit = map(int, dice.lower().split('d'))
+        if rolls <= 0 or limit <= 0:
+            await ctx.send('Number of rolls and dice faces must be positive!')
+            return
+        if rolls > 1000:
+            await ctx.send('Please do not roll more than 1000 dice at once.')
+            return
+        if limit > 1000000:
+            await ctx.send('Dice faces must be 1,000,000 or less.')
+            return
+    except ValueError:
+        await ctx.send('Format has to be in NdN (e.g., `2d6`)!')
+        return
+
+    results = [random.randint(1, limit) for _ in range(rolls)]
+    result_str = ', '.join(map(str, results))
+
+    if len(result_str) > 1000:
+        result_str = result_str[:1000] + "..."
+
+    embed = discord.Embed(title="Dice Roll", description=f"{rolls}d{limit}", color=discord.Color.blue())
+    embed.add_field(name="Results", value=result_str, inline=False)
+    if rolls > 1:
+        embed.add_field(name="Total", value=sum(results), inline=False)
+
+    print(f"Dice result: {result_str}")
+    await ctx.send(embed=embed)
+
+
+# --- Scheduled Task to Update Warhorn Schedule ---
+@tasks.loop(minutes=10)
+async def update_warhorn_schedule():
+    if not bot.is_ready() or not watched_schedules:
+        print("Scheduled update skipped: Bot not ready or no channels watched.")
+        return
+
+    print("Running scheduled Warhorn schedule update check...")
+    
+    new_embed, new_sessions_data = get_warhorn_embed_and_data(False)
+
+    if new_embed.color == discord.Color.red():
+        print("Scheduled update: Error fetching new Warhorn data. Skipping update for all channels.")
+        return
+
+    new_sessions_json = json.dumps(new_sessions_data, sort_keys=True)
+
+    channels_to_remove = []
+    for channel_id, message_object in list(watched_schedules.items()):
+        if not isinstance(message_object, discord.Message):
+            print(f"Scheduled update: Message object for channel {channel_id} not yet fetched. Skipping.")
+            continue
+
+        last_sessions_json = json.dumps(last_warhorn_sessions_data.get(channel_id, []), sort_keys=True)
+
+        if new_sessions_json != last_sessions_json:
+            print(f"Warhorn schedule content changed for channel {message_object.channel.name}. Editing message...")
+            try:
+                await message_object.edit(embed=new_embed)
+                last_warhorn_sessions_data[channel_id] = new_sessions_data
+                save_last_warhorn_sessions_data()
+                print(f"Edited schedule message {message_object.id} in {message_object.channel.name}.")
+            except discord.NotFound:
+                print(f"Scheduled update: Message {message_object.id} not found in channel {message_object.channel.name}. It might have been deleted manually or by on_message. Removing from watched_schedules.")
+                channels_to_remove.append(channel_id)
+            except discord.Forbidden:
+                print(f"Scheduled update: Bot lacks permissions to edit message {message_object.id} in channel {message_object.channel.name}. Removing from watched_schedules.")
+                channels_to_remove.append(channel_id)
+            except Exception as e:
+                print(f"An error occurred during scheduled update for channel {message_object.channel.name}: {e}")
+        else:
+            print(f"Warhorn schedule for channel {message_object.channel.name} is unchanged (content-wise).")
+
+    for ch_id in channels_to_remove:
+        if ch_id in watched_schedules:
+            del watched_schedules[ch_id]
+        if ch_id in last_warhorn_sessions_data:
+            del last_warhorn_sessions_data[ch_id]
+    save_watched_schedules()
+    save_last_warhorn_sessions_data()
+
+
+@update_warhorn_schedule.before_loop
+async def before_update_warhorn_schedule():
+    await bot.wait_until_ready()
+    print("Warhorn schedule update loop ready to start.")
+    await asyncio.sleep(5)
+    print("Finished initial delay for cache.")
+
+
+bot.run(discord_token)
