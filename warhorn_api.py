@@ -34,14 +34,45 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
         gameSystem {
           name
         }
-        # Removed coverImageUrl as it does not exist on Scenario type
       }
     }
   }
 }
 """
 
-# Removed waitlist_query as 'sessionWaitlistEntries' does not exist on type 'Query'
+# UPDATED: single_event_session_query to include 'links' and its 'url' and 'name'
+single_event_session_query = """
+query SingleEventSession($id: ID!) {
+  eventSession(id: $id) {
+    id
+    name
+    startsAt
+    location
+    maxPlayers
+    availablePlayerSeats
+    gmSignups {
+      user {
+        name
+      }
+    }
+    playerSignups {
+      user {
+        name
+      }
+    }
+    scenario {
+      name
+      gameSystem {
+        name
+      }
+    }
+    links { # ADDED: Requesting links
+      url # ADDED: Requesting the URL from the link
+      name # ADDED: Requesting the name of the link
+    }
+  }
+}
+"""
 
 class WarhornClient:
     def __init__(self, api_endpoint, app_token):
@@ -60,7 +91,7 @@ class WarhornClient:
 
         response = requests.post(self.api_endpoint, headers=headers, data=json.dumps(payload))
         print(f"Warhorn API response status: {response.status_code}")
-        print(f"Warhorn API raw response: {response.text}") # Keep this for debugging
+        print(f"Warhorn API raw response: {response.text}")
         response.raise_for_status()
         try:
             return response.json()
@@ -73,7 +104,8 @@ class WarhornClient:
         current_utc_time = datetime.now(timezone.utc).isoformat()
         return self.run_query(event_sessions_query, variables={"events": [event_slug], "startsAfter": current_utc_time})
 
-    # Removed get_session_waitlist method as 'sessionWaitlistEntries' does not exist
+    def get_single_event_session(self, session_id: str):
+        return self.run_query(single_event_session_query, variables={"id": session_id})
 
 if __name__ == "__main__":
     client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
@@ -84,13 +116,13 @@ if __name__ == "__main__":
         print("Successfully fetched event sessions:")
         print(json.dumps(sessions_data, indent=2))
 
-        # Example of fetching waitlist for the first session (if any) - This part would be removed or modified
-        # if sessions_data and "data" in sessions_data and sessions_data["data"]["eventSessions"]["nodes"]:
-        #     first_session_id = sessions_data["data"]["eventSessions"]["nodes"][0]["id"]
-        #     print(f"\nAttempting to fetch waitlist for session ID: {first_session_id}")
-        #     waitlist = client.get_session_waitlist(first_session_id) 
-        #     print("Successfully fetched waitlist:")
-        #     print(json.dumps(waitlist, indent=2))
+        # Example of fetching a single session by ID if get_event_sessions works
+        if sessions_data and "data" in sessions_data and "eventSessions" in sessions_data["data"] and sessions_data["data"]["eventSessions"]["nodes"]:
+            first_session_id = sessions_data["data"]["eventSessions"]["nodes"][0]["id"]
+            print(f"\nAttempting to fetch single session with ID: {first_session_id}")
+            single_session_data = client.get_single_event_session(first_session_id)
+            print("Successfully fetched single session:")
+            print(json.dumps(single_session_data, indent=2))
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data: {e}")
