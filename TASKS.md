@@ -3,6 +3,8 @@
 ## Immediate/Verification Tasks (Post-Fixes)
   - [ ] **Verify Warhorn API Fetch:** Confirm that `warhorn_api.py` (with `coverImageUrl` removed from the query) successfully fetches event sessions and waitlist data without any `KeyError` or other API-related errors.
   - [ ] **Verify Bot Schedule Display:** Confirm that `bot.py` (with `coverImageUrl` display logic removed) correctly sends and updates the Warhorn schedule messages in Discord, without any errors related to missing image URLs.
+  - [ ] **Waitlist Logic** We should be able to gather the waitlist with an additional command within the warhorn_api and provide that data back to the bot.py
+  - [ ] **Pin the Message** We should pin the message that is made, even if we are keeping it at the bottom
 
 ## Functional Enhancements (To be addressed)
   - [ ] **Warhorn Scenario Image Re-evaluation:**
@@ -30,4 +32,6 @@
 - [ ] **Improved Startup/Shutdown Resilience:**
     * Further enhance the bot's ability to recover gracefully on startup (e.g., better handling of deleted messages/channels when loading `watched_schedules`).
     * Ensure all data is saved reliably upon bot shutdown.
-
+- [ ] This message on startup should probably print better info, not just the numeric info.  (Channel name at least, perhaps also a date time stamp?)
+    >  Successfully fetched watched message 1396746335851515996 in channel 1016232161264807987.
+    > Successfully fetched watched message 1396746546216828991 in channel 688166777347506272.

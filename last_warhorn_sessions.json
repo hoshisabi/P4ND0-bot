@@ -1,1 +1,105 @@
-{}
+{
+    "688166777347506272": [
+        {
+            "id": "RXZlbnRTZXNzaW9uLTU2NDE2OQ==",
+            "name": "SJ-DC-IGC-ECP-03 Conflagration",
+            "startsAt": "2025-07-23T16:00:00-07:00",
+            "location": "Online (details in event)",
+            "maxPlayers": 6,
+            "availablePlayerSeats": 0,
+            "gmSignups": [
+                {
+                    "user": {
+                        "name": "Daniel Chapman"
+                    }
+                }
+            ],
+            "playerSignups": [
+                {
+                    "user": {
+                        "name": "Trey"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Cylet#6352 (John R)"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Mark Dezura"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Ttrpger"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Ken Beckman"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Gon Prie"
+                    }
+                }
+            ],
+            "scenario": {
+                "name": "SJ-DC-IGC-ECP-03 Conflagration",
+                "gameSystem": {
+                    "name": "Dungeons & Dragons 5th Edition"
+                }
+            }
+        },
+        {
+            "id": "RXZlbnRTZXNzaW9uLTU2NTgyOA==",
+            "name": "FR-DC-RPSG-09 Ruckus at the Reception",
+            "startsAt": "2025-07-30T16:00:00-07:00",
+            "location": "Online (details in event)",
+            "maxPlayers": 6,
+            "availablePlayerSeats": 1,
+            "gmSignups": [
+                {
+                    "user": {
+                        "name": "Daniel Chapman"
+                    }
+                }
+            ],
+            "playerSignups": [
+                {
+                    "user": {
+                        "name": "Ken Beckman"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Trey"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Gon Prie"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Mike Mc"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Jon"
+                    }
+                }
+            ],
+            "scenario": {
+                "name": "FR-DC-RPSG-09 Ruckus at the Reception",
+                "gameSystem": {
+                    "name": "Dungeons & Dragons 5th Edition"
+                }
+            }
+        }
+    ]
+}

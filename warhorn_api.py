@@ -41,19 +41,7 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
 }
 """
 
-# NEW QUERY FOR WAITLIST
-waitlist_query = """
-query SessionWaitlistEntries($eventSessionId: ID!) {
-  sessionWaitlistEntries(eventSession: $eventSessionId) {
-    nodes {
-      id
-      user {
-        name
-      }
-    }
-  }
-}
-"""
+# Removed waitlist_query as 'sessionWaitlistEntries' does not exist on type 'Query'
 
 class WarhornClient:
     def __init__(self, api_endpoint, app_token):
@@ -85,16 +73,7 @@ class WarhornClient:
         current_utc_time = datetime.now(timezone.utc).isoformat()
         return self.run_query(event_sessions_query, variables={"events": [event_slug], "startsAfter": current_utc_time})
 
-    # NEW METHOD TO GET WAITLIST
-    def get_session_waitlist(self, session_id):
-        try:
-            result = self.run_query(waitlist_query, variables={"eventSessionId": session_id})
-            if "data" in result and "sessionWaitlistEntries" in result["data"]:
-                return result["data"]["sessionWaitlistEntries"]["nodes"]
-            return []
-        except Exception as e:
-            print(f"Error fetching waitlist for session {session_id}: {e}")
-            return []
+    # Removed get_session_waitlist method as 'sessionWaitlistEntries' does not exist
 
 if __name__ == "__main__":
     client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
@@ -103,15 +82,15 @@ if __name__ == "__main__":
         print(f"Attempting to fetch event sessions for slug: {pandodnd_slug}")
         sessions_data = client.get_event_sessions(pandodnd_slug)
         print("Successfully fetched event sessions:")
-        print(json.dumps(sessions_data, indent=2)) # Print the full response now
+        print(json.dumps(sessions_data, indent=2))
 
-        # Example of fetching waitlist for the first session (if any)
-        if sessions_data and "data" in sessions_data and sessions_data["data"]["eventSessions"]["nodes"]:
-            first_session_id = sessions_data["data"]["eventSessions"]["nodes"][0]["id"]
-            print(f"\nAttempting to fetch waitlist for session ID: {first_session_id}")
-            waitlist = client.get_session_waitlist(first_session_id) 
-            print("Successfully fetched waitlist:")
-            print(json.dumps(waitlist, indent=2))
+        # Example of fetching waitlist for the first session (if any) - This part would be removed or modified
+        # if sessions_data and "data" in sessions_data and sessions_data["data"]["eventSessions"]["nodes"]:
+        #     first_session_id = sessions_data["data"]["eventSessions"]["nodes"][0]["id"]
+        #     print(f"\nAttempting to fetch waitlist for session ID: {first_session_id}")
+        #     waitlist = client.get_session_waitlist(first_session_id) 
+        #     print("Successfully fetched waitlist:")
+        #     print(json.dumps(waitlist, indent=2))
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data: {e}")
