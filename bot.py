@@ -14,6 +14,89 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import mysql.connector
 
+# Import the WarhornClient from your new file
+from warhorn_api import WarhornClient, event_sessions_query, WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN
+
+
+load_dotenv()
+
+discord_token = os.getenv("DISCORD_TOKEN")
+dbhost = os.getenv("DATABASE_HOST")
+dbuser = os.getenv("DATABASE_USER")
+dbpass = os.getenv("DATABASE_PASS")
+dbname = os.getenv("DATABASE_NAME")
+rssfeed = os.getenv("FEED_URL")
+
+# Initialize the WarhornClient globally or pass it where needed
+warhorn_client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
+
+
+def get_warhorn_embed(full: bool):
+    # Removed the redundant '# Schedule' from here. Discord Embed's title handles that.
+    desc_text = """The following games are upcoming on this server, click on a link to schedule a seat.
+
+"""
+    pandodnd_slug = "pandodnd"
+    # Use the warhorn_client to get event sessions (now filtered server-side)
+    result = warhorn_client.get_event_sessions(pandodnd_slug)
+    print(f"Warhorn API raw response for embed generation: {result}")
+
+    if "data" not in result or "eventSessions" not in result["data"] or "nodes" not in result["data"]["eventSessions"]:
+        print("Unexpected Warhorn API response structure.")
+        return discord.Embed(title="Schedule Error", description="Could not retrieve schedule from Warhorn. Please try again later.", color=discord.Color.red())
+
+    sessions_to_display = result["data"]["eventSessions"]["nodes"]
+
+    if not sessions_to_display:
+        desc_text += "\nNo upcoming games currently scheduled. Check back later!\n"
+    else:
+        for session in sessions_to_display:
+            session_name = session["name"]
+            session_id = session["id"].replace("EventSession-", "")
+            starts_at = datetime.fromisoformat(session["startsAt"]).strftime("%B %d, %Y %I:%M %p")
+            location = session["location"]
+            max_players = session["maxPlayers"]
+            available_seats = session["availablePlayerSeats"]
+            
+            gm_names_list = []
+            for gm in session["gmSignups"]:
+                name = gm["user"]["name"]
+                if "(" in name and name.endswith(")"):
+                    parts = name.split("(", 1)
+                    display_name = parts[0].strip()
+                    discord_handle = parts[1][:-1].strip()
+                    gm_names_list.append(f"{discord_handle} ({display_name})")
+                elif "#" in name:
+                    gm_names_list.append(name)
+                else:
+                    gm_names_list.append(name)
+            gm_names = ", ".join(gm_names_list) if gm_names_list else "(None)"
+
+            player_names_list = []
+            for player in session["playerSignups"]:
+                name = player["user"]["name"]
+                if "(" in name and name.endswith(")"):
+                    parts = name.split("(", 1)
+                    display_name = parts[0].strip()
+                    discord_handle = parts[1][:-1].strip()
+                    player_names_list.append(f"{discord_handle} ({display_name})")
+                elif "#" in name:
+                    player_names_list.append(name)
+                else:
+                    player_names_list.append(name)
+            player_names = ", ".join(player_names_list) if player_names_list else "(empty)"
+            scenario_name = session["scenario"]["name"]
+            game_system = session["scenario"]["gameSystem"]["name"]
+
+            warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule/sessions/{session_id}"
+
+            desc_text += f"* [{session_name}]({warhorn_url}) `{starts_at}`\n"
+            desc_text += f"  * **DM:** {gm_names}\n"
+            desc_text += f"  * **Players:** {player_names}, ({available_seats} empty slots)\n"
+
+
+    return discord.Embed(title="Schedule", type="rich", description=desc_text, color=discord.Color.green())
+
 description = '''
 A placeholder bot for the P4ND0 server, much more will eventually be here
 but right now, it's just a very basic thing. Look for more capabilities later!
@@ -104,12 +187,10 @@ async def on_message(message):
     await bot.process_commands(message)
     if message.author != bot.user:
         key = get_key_from_message(message)
-        if schedule_message := watched_channels[key]:
+        if key in watched_channels and (schedule_message := watched_channels[key]):
             await schedule_message.delete()
-            watched_channels[key] = await message.channel.send(embed=get_rss_embed(False))
+            watched_channels[key] = await message.channel.send(embed=get_warhorn_embed(False))
             print("Updated channel with new events")
-        else:
-            await message.channel.send("Did not find scheduled message to edit.")
 
 
 @bot.hybrid_command()
@@ -132,10 +213,11 @@ async def character(ctx, url: str = None, user: discord.User = commands.paramete
 
 
 @bot.command()
-async def schedule(ctx, arg: typing.Optional[bool]):
+async def schedule(ctx, arg: typing.Optional[bool] = False):
     """Pulls the most recent schedule of upcoming events from Warhorn displayed in local time
     Pass "True" to get full details of event. """
-    await rss(ctx)
+    embed = get_warhorn_embed(arg)
+    await ctx.send(embed=embed)
 
 
 @bot.command()
@@ -154,35 +236,11 @@ async def quote(ctx):
 @bot.command()
 async def watch(ctx):
     """Watch a channel to ensure that the schedule is always the most recent message"""
-    embed = get_rss_embed(False)
+    embed = get_warhorn_embed(False)
     message = await ctx.send(embed=embed)
     key = get_key_from_message(message)
     watched_channels[key] = message
     print(f"Set to watch channel {message.channel}: {watched_channels}")
-
-
-def get_rss_embed(full: bool):
-    desc_text = f"The following games are upcoming on this server, click on a link to schedule a seat.\n\n"
-    rss_feed = feedparser.parse(rssfeed)
-    print(rss_feed)
-    for x in rss_feed.entries:
-        desc_text += f"* [{x.title}]({x.link}) <t:{to_discord_timestamp(x.gd_when['starttime'])}>"
-        if full:
-            mdif = markdownify.markdownify(x.summary)
-            lines = mdif.splitlines()
-            desc_text += "\n>".join([line for line in lines if line.strip()])
-        desc_text += "\n"
-    print(f"Generated embed:\n{desc_text}")
-    return discord.Embed(title="Schedule", type="rich", description=desc_text, color=discord.Color.green())
-
-
-@bot.command()
-async def rss(ctx, arg: typing.Optional[bool]):
-    """Pulls the most recent schedule of upcoming events from Warhorn displayed in local time
-    Pass "True" to get full details of event. """
-    print(arg)
-    embed = get_rss_embed(arg)
-    return await ctx.send(embed=embed)
 
 
 @bot.command()
@@ -200,14 +258,6 @@ async def roll(ctx, dice: str):
     await ctx.send(embed=embed)
 
 
-load_dotenv()
-
-discord_token = os.getenv("DISCORD_TOKEN")
-dbhost = os.getenv("DATABASE_HOST")
-dbuser = os.getenv("DATABASE_USER")
-dbpass = os.getenv("DATABASE_PASS")
-dbname = os.getenv("DATABASE_NAME")
-rssfeed = os.getenv("FEED_URL")
 characters = {}
 
 # load_characters()
