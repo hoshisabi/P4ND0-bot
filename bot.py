@@ -14,8 +14,8 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import mysql.connector
 
-# Import the WarhornClient from your new file
-from warhorn_api import WarhornClient, event_sessions_query, WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN
+# Import the WarhornClient and API constants from your warhorn_api.py file
+from warhorn_api import WarhornClient, WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN
 
 
 load_dotenv()
@@ -27,17 +27,17 @@ dbpass = os.getenv("DATABASE_PASS")
 dbname = os.getenv("DATABASE_NAME")
 rssfeed = os.getenv("FEED_URL")
 
-# Initialize the WarhornClient globally or pass it where needed
+# Initialize the WarhornClient globally
 warhorn_client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
 
 
 def get_warhorn_embed(full: bool):
-    # Removed the redundant '# Schedule' from here. Discord Embed's title handles that.
+    # REMOVED THE '# Schedule' from here. The Discord Embed's title handles the main header.
     desc_text = """The following games are upcoming on this server, click on a link to schedule a seat.
 
 """
     pandodnd_slug = "pandodnd"
-    # Use the warhorn_client to get event sessions (now filtered server-side)
+    # Use the warhorn_client instance for API calls
     result = warhorn_client.get_event_sessions(pandodnd_slug)
     print(f"Warhorn API raw response for embed generation: {result}")
 
@@ -45,6 +45,7 @@ def get_warhorn_embed(full: bool):
         print("Unexpected Warhorn API response structure.")
         return discord.Embed(title="Schedule Error", description="Could not retrieve schedule from Warhorn. Please try again later.", color=discord.Color.red())
 
+    # Sessions are now filtered server-side by startsAfter
     sessions_to_display = result["data"]["eventSessions"]["nodes"]
 
     if not sessions_to_display:
@@ -52,50 +53,61 @@ def get_warhorn_embed(full: bool):
     else:
         for session in sessions_to_display:
             session_name = session["name"]
-            session_id = session["id"].replace("EventSession-", "")
+            session_id = session["id"].replace("EventSession-", "") # Remove prefix for URL
+            # Format start time
             starts_at = datetime.fromisoformat(session["startsAt"]).strftime("%B %d, %Y %I:%M %p")
             location = session["location"]
             max_players = session["maxPlayers"]
             available_seats = session["availablePlayerSeats"]
             
+            # --- GM Name Formatting ---
             gm_names_list = []
             for gm in session["gmSignups"]:
                 name = gm["user"]["name"]
                 if "(" in name and name.endswith(")"):
-                    parts = name.split("(", 1)
+                    parts = name.split("(", 1) # Split only on the first parenthesis
                     display_name = parts[0].strip()
                     discord_handle = parts[1][:-1].strip()
+                    # Formatted as: Discord Handle (Warhorn Name)
                     gm_names_list.append(f"{discord_handle} ({display_name})")
-                elif "#" in name:
+                elif "#" in name: # Handle names that are just Discord tags
                     gm_names_list.append(name)
-                else:
+                else: # Handle plain Warhorn names
                     gm_names_list.append(name)
             gm_names = ", ".join(gm_names_list) if gm_names_list else "(None)"
 
+            # --- Player Name Formatting ---
             player_names_list = []
             for player in session["playerSignups"]:
                 name = player["user"]["name"]
                 if "(" in name and name.endswith(")"):
-                    parts = name.split("(", 1)
+                    parts = name.split("(", 1) # Split only on the first parenthesis
                     display_name = parts[0].strip()
                     discord_handle = parts[1][:-1].strip()
+                    # Formatted as: Discord Handle (Warhorn Name)
                     player_names_list.append(f"{discord_handle} ({display_name})")
-                elif "#" in name:
+                elif "#" in name: # Handle names that are just Discord tags
                     player_names_list.append(name)
-                else:
+                else: # Handle plain Warhorn names
                     player_names_list.append(name)
             player_names = ", ".join(player_names_list) if player_names_list else "(empty)"
+            
             scenario_name = session["scenario"]["name"]
             game_system = session["scenario"]["gameSystem"]["name"]
 
+            # Construct the Warhorn URL
             warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule/sessions/{session_id}"
 
             desc_text += f"* [{session_name}]({warhorn_url}) `{starts_at}`\n"
             desc_text += f"  * **DM:** {gm_names}\n"
-            desc_text += f"  * **Players:** {player_names}, ({available_seats} empty slots)\n"
+            # Added italics to the empty slots part
+            desc_text += f"  * **Players:** {player_names}, *({available_seats} empty slots)*\n"
+            # Waitlist information not available from current API query
+            # desc_text += f"  * **Waitlist:** (N players)\n"
 
 
-    return discord.Embed(title="Schedule", type="rich", description=desc_text, color=discord.Color.green())
+    # Set the embed color to a shade of blue
+    return discord.Embed(title="Schedule", type="rich", description=desc_text, color=discord.Color.blue()) # Changed color here
 
 description = '''
 A placeholder bot for the P4ND0 server, much more will eventually be here
