@@ -11,10 +11,9 @@ import discord
 import requests
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
-from pytz import timezone # Assuming pytz is installed for timezone conversion
 
 # Import the WarhornClient from your warhorn_api.py file
-from warhorn_api import WarhornClient, event_sessions_query # Importing event_sessions_query just for reference, not directly used here for client operations
+from warhorn_api import WarhornClient, event_sessions_query
 
 load_dotenv()
 
@@ -191,9 +190,7 @@ The following games are upcoming on this server, click on a link to schedule a s
 """
     pandodnd_slug = "pandodnd"
     try:
-        # Pass the current UTC time for startsAfter filter, directly to the client
-        current_utc_time = datetime.now(timezone.utc).isoformat(timespec='seconds') + 'Z' 
-        # The warhorn_api.py's get_event_sessions already handles this with 'startsAfter'
+        # The warhorn_api.py's get_event_sessions already uses 'startsAfter'
         result = warhorn_client.get_event_sessions(pandodnd_slug)
         print(f"Warhorn API response: {json.dumps(result, indent=2)}")
 
@@ -224,11 +221,12 @@ The following games are upcoming on this server, click on a link to schedule a s
             gm_name = session["gmSignups"][0]["user"]["name"] if session["gmSignups"] else "No GM"
             players_signed_up = len(session["playerSignups"])
 
+            # Convert to Unix timestamp for Discord's specialized time handling
             utc_dt = datetime.fromisoformat(session_start_str.replace("Z", "+00:00"))
-            eastern = timezone('America/New_York')
-            local_dt = utc_dt.astimezone(eastern)
-
-            time_str = local_dt.strftime("%A, %B %d, %I:%M %p %Z")
+            unix_timestamp = int(utc_dt.timestamp())
+            
+            # Format using Discord's timestamp markdown (F for Long Date/Time)
+            time_str = f"<t:{unix_timestamp}:F>"
 
             warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule/sessions/{session_id}"
 
@@ -360,9 +358,7 @@ async def character(ctx, character_url: typing.Optional[str] = None):
 
 @bot.command()
 async def schedule(ctx, full: typing.Optional[bool] = False):
-    """Pulls the most recent schedule of upcoming events from Warhorn displayed in local time.
-    Pass 'True' to get full details of events (though current implementation always gives details).
-    """
+    """Pulls the most recent schedule of upcoming events from Warhorn displayed in your local time."""
     embed_to_send, _ = get_warhorn_embed_and_data(full)
 
     if embed_to_send.color == discord.Color.red():
