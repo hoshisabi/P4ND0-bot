@@ -34,7 +34,7 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
         gameSystem {
           name
         }
-        coverImageUrl # ADDED: Fetch cover image URL
+        # Removed coverImageUrl as it does not exist on Scenario type
       }
     }
   }
@@ -72,7 +72,7 @@ class WarhornClient:
 
         response = requests.post(self.api_endpoint, headers=headers, data=json.dumps(payload))
         print(f"Warhorn API response status: {response.status_code}")
-        # print(f"Warhorn API raw response: {response.text}") # Keep this for debugging if needed, but remove for cleaner output
+        print(f"Warhorn API raw response: {response.text}") # Keep this for debugging
         response.raise_for_status()
         try:
             return response.json()
@@ -103,14 +103,12 @@ if __name__ == "__main__":
         print(f"Attempting to fetch event sessions for slug: {pandodnd_slug}")
         sessions_data = client.get_event_sessions(pandodnd_slug)
         print("Successfully fetched event sessions:")
-        # print(json.dumps(sessions_data, indent=2)) # Temporarily removed for cleaner output
-        
+        print(json.dumps(sessions_data, indent=2)) # Print the full response now
+
         # Example of fetching waitlist for the first session (if any)
-        if sessions_data and sessions_data["data"]["eventSessions"]["nodes"]:
+        if sessions_data and "data" in sessions_data and sessions_data["data"]["eventSessions"]["nodes"]:
             first_session_id = sessions_data["data"]["eventSessions"]["nodes"][0]["id"]
             print(f"\nAttempting to fetch waitlist for session ID: {first_session_id}")
-            # This would typically be awaited in an async context if run outside of __main__ block
-            # For this simple example, we're calling it synchronously.
             waitlist = client.get_session_waitlist(first_session_id) 
             print("Successfully fetched waitlist:")
             print(json.dumps(waitlist, indent=2))

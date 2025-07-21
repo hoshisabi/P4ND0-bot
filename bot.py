@@ -215,8 +215,9 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async because of 
             scenario_name = session["scenario"]["name"] if session["scenario"] else "N/A"
             game_system_name = session["scenario"]["gameSystem"]["name"] if session["scenario"] and session["scenario"]["gameSystem"] else "N/A"
             
-            # --- NEW: Get Scenario Cover Image ---
-            cover_image_url = session["scenario"]["coverImageUrl"] if session["scenario"] and session["scenario"]["coverImageUrl"] else None
+            # --- REMOVED: Get Scenario Cover Image ---
+            # cover_image_url = session["scenario"]["coverImageUrl"] if session["scenario"] and session["scenario"]["coverImageUrl"] else None
+            # This field caused an API error and is not available at the moment.
 
             max_players = session["maxPlayers"]
             available_seats = session["availablePlayerSeats"]
@@ -298,12 +299,9 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async because of 
             session_block += f"• **Players:** {players_list_str}\n"
             session_block += f"{status_line}\n" # Conditional status line
 
-            # --- NEW: Include image if available ---
-            if cover_image_url:
-                # Discord will typically scale this to fit thumbnail-like size in embeds,
-                # but direct ![alt](url) can sometimes render larger or as a broken link if too big
-                # For per-session images, this is the most direct way within the description.
-                session_block += f"• ![Scenario Image]({cover_image_url})\n"
+            # --- REMOVED: Image inclusion logic as coverImageUrl is not available ---
+            # if cover_image_url:
+            #     session_block += f"• ![Scenario Image]({cover_image_url})\n"
             
             session_block += "\n" # Add a newline to separate sessions
 
