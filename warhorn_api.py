@@ -20,7 +20,7 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
       location
       maxPlayers
       availablePlayerSeats
-      uuid # ADDED: Requesting the UUID field
+      uuid
       gmSignups {
         user {
           name

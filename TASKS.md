@@ -18,7 +18,8 @@
 - [ ] **Slash Commands** Use proper slash commands instead of looking for $watch and
                          similar dollar sign text to signify bot commands.
 - [ ] **DM Handling**    Bot handles DMs just fine, but some commands such as watch do
-                         weird things when you run it from within a DM. We should better handle that, as well as better inform the user that they can send private messages to the bot.
+                         weird things when you run it from within a DM. We should better handle that, 
+                         as well as better inform the user that they can send private messages to the bot.
 - [ ] **Refactor `bot.py` into Modules:**
     * Break down the large `bot.py` file into smaller, specialized modules (e.g., `cogs/warhorn.py`, `cogs/characters.py`, `utils/persistence.py`, `utils/embed_generator.py`).
     * Organize commands and tasks into Discord.py `cogs` for better organization and management.
@@ -35,3 +36,5 @@
 - [ ] This message on startup should probably print better info, not just the numeric info.  (Channel name at least, perhaps also a date time stamp?)
     >  Successfully fetched watched message 1396746335851515996 in channel 1016232161264807987.
     > Successfully fetched watched message 1396746546216828991 in channel 688166777347506272.
+- [ ] We could watch other warhorn sites with this if we pass in the slug, perhaps $watch (slug) could be used.  Should also
+      be able to derive the slug from the URL, if the user passes in the URL
