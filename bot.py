@@ -3,14 +3,14 @@ import json
 import os
 import random
 import typing
-from datetime import datetime
+from datetime import datetime, timezone
 
 import discord
 import feedparser
 import markdownify
 import requests
 from mysql.connector import Error
-from discord.ext import commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 import mysql.connector
 
@@ -30,22 +30,22 @@ rssfeed = os.getenv("FEED_URL")
 # Initialize the WarhornClient globally
 warhorn_client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
 
+# Dictionary to store (channel_id, message_id) for watched schedule messages
+# And also the last fetched Warhorn data to compare against
+watched_schedules = {}
 
+# --- Utility to get Warhorn embed ---
 def get_warhorn_embed(full: bool):
-    # REMOVED THE '# Schedule' from here. The Discord Embed's title handles the main header.
     desc_text = """The following games are upcoming on this server, click on a link to schedule a seat.
 
 """
     pandodnd_slug = "pandodnd"
-    # Use the warhorn_client instance for API calls
     result = warhorn_client.get_event_sessions(pandodnd_slug)
-    print(f"Warhorn API raw response for embed generation: {result}")
 
     if "data" not in result or "eventSessions" not in result["data"] or "nodes" not in result["data"]["eventSessions"]:
         print("Unexpected Warhorn API response structure.")
-        return discord.Embed(title="Schedule Error", description="Could not retrieve schedule from Warhorn. Please try again later.", color=discord.Color.red())
+        return discord.Embed(title="Schedule Error", description="Could not retrieve schedule from Warhorn. Please try again later.", color=discord.Color.red()), None
 
-    # Sessions are now filtered server-side by startsAfter
     sessions_to_display = result["data"]["eventSessions"]["nodes"]
 
     if not sessions_to_display:
@@ -53,68 +53,57 @@ def get_warhorn_embed(full: bool):
     else:
         for session in sessions_to_display:
             session_name = session["name"]
-            session_id = session["id"].replace("EventSession-", "") # Remove prefix for URL
-            # Format start time
+            session_id = session["id"].replace("EventSession-", "")
             starts_at = datetime.fromisoformat(session["startsAt"]).strftime("%B %d, %Y %I:%M %p")
             location = session["location"]
             max_players = session["maxPlayers"]
             available_seats = session["availablePlayerSeats"]
             
-            # --- GM Name Formatting ---
             gm_names_list = []
             for gm in session["gmSignups"]:
                 name = gm["user"]["name"]
                 if "(" in name and name.endswith(")"):
-                    parts = name.split("(", 1) # Split only on the first parenthesis
+                    parts = name.split("(", 1)
                     display_name = parts[0].strip()
                     discord_handle = parts[1][:-1].strip()
-                    # Formatted as: Discord Handle (Warhorn Name)
                     gm_names_list.append(f"{discord_handle} ({display_name})")
-                elif "#" in name: # Handle names that are just Discord tags
+                elif "#" in name:
                     gm_names_list.append(name)
-                else: # Handle plain Warhorn names
+                else:
                     gm_names_list.append(name)
             gm_names = ", ".join(gm_names_list) if gm_names_list else "(None)"
 
-            # --- Player Name Formatting ---
             player_names_list = []
             for player in session["playerSignups"]:
                 name = player["user"]["name"]
                 if "(" in name and name.endswith(")"):
-                    parts = name.split("(", 1) # Split only on the first parenthesis
+                    parts = name.split("(", 1)
                     display_name = parts[0].strip()
                     discord_handle = parts[1][:-1].strip()
-                    # Formatted as: Discord Handle (Warhorn Name)
                     player_names_list.append(f"{discord_handle} ({display_name})")
-                elif "#" in name: # Handle names that are just Discord tags
+                elif "#" in name:
                     player_names_list.append(name)
-                else: # Handle plain Warhorn names
+                else:
                     player_names_list.append(name)
             player_names = ", ".join(player_names_list) if player_names_list else "(empty)"
             
             scenario_name = session["scenario"]["name"]
             game_system = session["scenario"]["gameSystem"]["name"]
 
-            # Construct the Warhorn URL
             warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule/sessions/{session_id}"
 
             desc_text += f"* [{session_name}]({warhorn_url}) `{starts_at}`\n"
             desc_text += f"  * **DM:** {gm_names}\n"
-            # Added italics to the empty slots part
             desc_text += f"  * **Players:** {player_names}, *({available_seats} empty slots)*\n"
-            # Waitlist information not available from current API query
-            # desc_text += f"  * **Waitlist:** (N players)\n"
 
 
-    # Set the embed color to a shade of blue
-    return discord.Embed(title="Schedule", type="rich", description=desc_text, color=discord.Color.blue()) # Changed color here
+    return discord.Embed(title="Schedule", type="rich", description=desc_text, color=discord.Color.blue()), sessions_to_display
+
 
 description = '''
 A placeholder bot for the P4ND0 server, much more will eventually be here
 but right now, it's just a very basic thing. Look for more capabilities later!
 '''
-
-watched_channels = {}
 
 intents = discord.Intents.default()
 intents.members = True
@@ -123,95 +112,152 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='$', description=description, intents=intents)
 
 
+# --- Character Persistence Functions (with corrections) ---
+characters = {} # Initialize characters dictionary
+
 def save_characters():
+    cnx = None # Initialize cnx to None
     try:
+        print("Attempting to connect to DB for saving characters...")
         cnx = mysql.connector.connect(host=dbhost,
                                       database=dbname,
                                       user=dbuser,
                                       password=dbpass)
         if cnx.is_connected():
-            dbinfo = cnx.get_server_info()
-            print(f"Connected to server: {dbinfo}")
+            print("Successfully connected to DB for saving characters.")
+            cursor = cnx.cursor()
+            insert_sql = "INSERT INTO characters (discord_id, character_url) VALUES (%s, %s);"
+            delete_sql = "DELETE FROM characters WHERE discord_id = %s;"
 
-        cursor = cnx.cursor()
-        insert_sql = "INSERT INTO characters (discord_id, character_url) VALUES (%s, %s);"
-        delete_sql = "delete from characters where discord_id = %s"
-
-        for (discord_id, url_set) in characters.items():
-            cursor.execute(delete_sql, tuple(character))
-            for url in url_set:
-                cursor.execute(insert_sql, tuple(discord_id, url))
-
+            for discord_id, url_set in characters.items():
+                cursor.execute(delete_sql, (discord_id,))
+                for url in url_set:
+                    cursor.execute(insert_sql, (discord_id, url))
+            cnx.commit()
+            print("Characters saved to DB.")
     except Error as e:
-        print("Error connecting to db", e)
+        print(f"Error saving characters to DB: {e}")
     finally:
-        if cnx.is_connected():
+        if cnx and cnx.is_connected():
             cursor.close()
             cnx.close()
-            print("closed connection to db")
-
+            print("DB connection closed after saving characters.")
 
 def load_characters():
+    cnx = None # Initialize cnx to None
     try:
+        print("Attempting to connect to DB for loading characters...")
         cnx = mysql.connector.connect(host=dbhost,
                                       database=dbname,
                                       user=dbuser,
                                       password=dbpass)
         if cnx.is_connected():
-            dbinfo = cnx.get_server_info()
-            print(f"Connected to server: {dbinfo}")
-
-        cursor = cnx.cursor()
-        sql = "select discord_id, character_url from characters"
-        cursor.execute(sql)
-
-        for (discord_id, url) in cursor:
-            mychars = characters.setdefault(discord_id, set())
-            mychars.add(url)
-
-        cnx.commit()
-
+            print("Successfully connected to DB for loading characters.")
+            cursor = cnx.cursor()
+            sql = "SELECT discord_id, character_url FROM characters;"
+            cursor.execute(sql)
+            
+            characters.clear() # Clear existing in-memory data before loading
+            for discord_id, url in cursor:
+                mychars = characters.setdefault(discord_id, set())
+                mychars.add(url)
+            print("Characters loaded from DB.")
     except Error as e:
-        print("Error connecting to db", e)
+        print(f"Error loading characters from DB: {e}")
     finally:
-        if cnx.is_connected():
+        if cnx and cnx.is_connected():
             cursor.close()
             cnx.close()
-            print("closed connection to db")
+            print("DB connection closed after loading characters.")
 
 
-def to_discord_timestamp(incoming_time):
-    return int(datetime.fromisoformat(incoming_time).timestamp())
+# --- Watched Schedules Persistence Functions (NEW) ---
+def save_watched_schedules():
+    cnx = None # Initialize cnx to None
+    try:
+        print("Attempting to connect to DB for saving watched schedules...")
+        cnx = mysql.connector.connect(host=dbhost,
+                                      database=dbname,
+                                      user=dbuser,
+                                      password=dbpass)
+        if cnx.is_connected():
+            print("Successfully connected to DB for saving watched schedules.")
+            cursor = cnx.cursor()
+            # Clear existing data and insert current state for simplicity
+            delete_all_sql = "DELETE FROM watched_schedules;"
+            cursor.execute(delete_all_sql)
+            
+            insert_sql = "INSERT INTO watched_schedules (channel_id, message_id, last_sessions_data_json) VALUES (%s, %s, %s);"
+            
+            for channel_id, info in watched_schedules.items():
+                message_id = info["message_id"]
+                # Serialize the list of dictionaries to a JSON string
+                last_sessions_data_json = json.dumps(info["last_sessions_data"])
+                cursor.execute(insert_sql, (channel_id, message_id, last_sessions_data_json))
+            
+            cnx.commit()
+            print("Watched schedules saved to DB.")
+    except Error as e:
+        print(f"Error saving watched schedules to DB: {e}")
+    finally:
+        if cnx and cnx.is_connected():
+            cursor.close()
+            cnx.close()
+            print("DB connection closed after saving watched schedules.")
 
+def load_watched_schedules():
+    cnx = None # Initialize cnx to None
+    try:
+        print("Attempting to connect to DB for loading watched schedules...")
+        cnx = mysql.connector.connect(host=dbhost,
+                                      database=dbname,
+                                      user=dbuser,
+                                      password=dbpass)
+        if cnx.is_connected():
+            print("Successfully connected to DB for loading watched schedules.")
+            cursor = cnx.cursor()
+            sql = "SELECT channel_id, message_id, last_sessions_data_json FROM watched_schedules;"
+            cursor.execute(sql)
+            
+            watched_schedules.clear() # Clear existing in-memory data before loading
+            for channel_id, message_id, last_sessions_data_json in cursor:
+                # Deserialize the JSON string back to a Python object
+                last_sessions_data = json.loads(last_sessions_data_json)
+                watched_schedules[channel_id] = {
+                    "message_id": message_id,
+                    "last_sessions_data": last_sessions_data
+                }
+            print("Watched schedules loaded from DB.")
+    except Error as e:
+        print(f"Error loading watched schedules from DB: {e}")
+    finally:
+        if cnx and cnx.is_connected():
+            cursor.close()
+            cnx.close()
+            print("DB connection closed after loading watched schedules.")
 
+# --- Discord Bot Events ---
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
-
-
-def get_key_from_message(message):
-    return f"{message.guild}:{message.channel}"
+    load_characters() # Load characters on startup
+    load_watched_schedules() # Load watched schedules on startup
+    update_warhorn_schedule.start() # Start the scheduled task
 
 
 @bot.event
 async def on_message(message):
     await bot.process_commands(message)
-    if message.author != bot.user:
-        key = get_key_from_message(message)
-        if key in watched_channels and (schedule_message := watched_channels[key]):
-            await schedule_message.delete()
-            watched_channels[key] = await message.channel.send(embed=get_warhorn_embed(False))
-            print("Updated channel with new events")
 
 
-@bot.hybrid_command()
+@bot.command()
 async def character(ctx, url: str = None, user: discord.User = commands.parameter(default=lambda ctx: ctx.author)):
     name = f"{user.name}#{user.discriminator}"
     mychars = characters.setdefault(name, set())
     if url:
         mychars.add(url)
-        save_characters()
+        save_characters() # Save characters after modification
         await ctx.send(f"Saving {url} for {name}.")
         print(characters)
     else:
@@ -228,7 +274,10 @@ async def character(ctx, url: str = None, user: discord.User = commands.paramete
 async def schedule(ctx, arg: typing.Optional[bool] = False):
     """Pulls the most recent schedule of upcoming events from Warhorn displayed in local time
     Pass "True" to get full details of event. """
-    embed = get_warhorn_embed(arg)
+    embed, _ = get_warhorn_embed(arg)
+    if embed.color == discord.Color.red():
+        await ctx.send(embed=embed)
+        return
     await ctx.send(embed=embed)
 
 
@@ -247,12 +296,68 @@ async def quote(ctx):
 
 @bot.command()
 async def watch(ctx):
-    """Watch a channel to ensure that the schedule is always the most recent message"""
-    embed = get_warhorn_embed(False)
+    """Watches this channel for Warhorn schedule updates, maintaining a pinned message."""
+    if ctx.channel.id in watched_schedules:
+        old_message_info = watched_schedules[ctx.channel.id]
+        try:
+            old_message = await ctx.channel.fetch_message(old_message_info["message_id"])
+            await old_message.unpin()
+            await old_message.delete()
+            print(f"Old schedule message unpinned and deleted in channel {ctx.channel.id}.")
+        except discord.NotFound:
+            print(f"Old schedule message not found in channel {ctx.channel.id}, it might have been deleted manually.")
+        except discord.Forbidden:
+            print(f"Bot does not have permissions to unpin/delete messages in channel {ctx.channel.id}.")
+        except Exception as e:
+            print(f"Error handling old message in watched channel: {e}")
+
+    embed, sessions_data = get_warhorn_embed(False)
+    if embed.color == discord.Color.red():
+        await ctx.send(embed=embed)
+        return
+
     message = await ctx.send(embed=embed)
-    key = get_key_from_message(message)
-    watched_channels[key] = message
-    print(f"Set to watch channel {message.channel}: {watched_channels}")
+    
+    try:
+        await message.pin()
+        print(f"Pinned schedule message in channel {ctx.channel.id}.")
+    except discord.Forbidden:
+        await ctx.send("I don't have permissions to pin messages in this channel! Please grant 'Manage Messages' permission.")
+        print(f"Bot lacks permissions to pin in channel {ctx.channel.id}.")
+        return
+
+    watched_schedules[ctx.channel.id] = {
+        "message_id": message.id,
+        "last_sessions_data": sessions_data
+    }
+    save_watched_schedules() # Save watched schedules after modification
+    print(f"Set to watch channel {ctx.channel.id} with message ID {message.id}.")
+
+
+@bot.command()
+async def unwatch(ctx):
+    """Stops watching this channel for Warhorn schedule updates and unpins/deletes the message."""
+    if ctx.channel.id in watched_schedules:
+        message_info = watched_schedules[ctx.channel.id]
+        try:
+            message = await ctx.channel.fetch_message(message_info["message_id"])
+            await message.unpin()
+            await message.delete()
+            del watched_schedules[ctx.channel.id]
+            save_watched_schedules() # Save watched schedules after modification
+            await ctx.send("Stopped watching this channel and removed the schedule message.")
+            print(f"Stopped watching channel {ctx.channel.id}.")
+        except discord.NotFound:
+            await ctx.send("No schedule message found to unwatch in this channel.")
+            del watched_schedules[ctx.channel.id] # Clear stale entry in memory
+            save_watched_schedules() # Save updated state to DB
+        except discord.Forbidden:
+            await ctx.send("I don't have permissions to unpin/delete messages in this channel!")
+        except Exception as e:
+            await ctx.send(f"An error occurred while unwatching: {e}")
+            print(f"Error unwatching channel {ctx.channel.id}: {e}")
+    else:
+        await ctx.send("This channel is not currently being watched.")
 
 
 @bot.command()
@@ -270,7 +375,57 @@ async def roll(ctx, dice: str):
     await ctx.send(embed=embed)
 
 
-characters = {}
+# --- Scheduled Task to Update Warhorn Schedule ---
+@tasks.loop(minutes=30)
+async def update_warhorn_schedule():
+    print("Running scheduled Warhorn schedule update check...")
+    if not watched_schedules:
+        print("No channels are being watched for schedules.")
+        return
 
-# load_characters()
+    for channel_id, info in list(watched_schedules.items()):
+        message_id = info["message_id"]
+        last_sessions_data = info["last_sessions_data"]
+        
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            print(f"Watched channel {channel_id} not found, removing from watched_schedules.")
+            del watched_schedules[channel_id]
+            save_watched_schedules()
+            continue
+        
+        try:
+            new_embed, new_sessions_data = get_warhorn_embed(False)
+
+            if new_embed.color == discord.Color.red():
+                print(f"Error fetching new Warhorn data for channel {channel_id}. Skipping update.")
+                continue
+
+            if json.dumps(new_sessions_data, sort_keys=True) != json.dumps(last_sessions_data, sort_keys=True):
+                print(f"Warhorn schedule changed for channel {channel_id}. Updating message...")
+                message = await channel.fetch_message(message_id)
+                await message.edit(embed=new_embed)
+                watched_schedules[channel_id]["last_sessions_data"] = new_sessions_data
+                save_watched_schedules()
+            else:
+                print(f"Warhorn schedule for channel {channel_id} is unchanged.")
+
+        except discord.NotFound:
+            print(f"Schedule message {message_id} not found in channel {channel_id}, removing from watched_schedules.")
+            del watched_schedules[channel_id]
+            save_watched_schedules()
+        except discord.Forbidden:
+            print(f"Bot lacks permissions to edit message {message_id} in channel {channel_id}, removing from watched_schedules.")
+            del watched_schedules[channel_id]
+            save_watched_schedules()
+        except Exception as e:
+            print(f"An error occurred during scheduled update for channel {channel_id}: {e}")
+
+
+@update_warhorn_schedule.before_loop
+async def before_update_warhorn_schedule():
+    await bot.wait_until_ready()
+    print("Warhorn schedule update loop ready to start.")
+
+
 bot.run(discord_token)
