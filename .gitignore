@@ -4,3 +4,4 @@ characters.bz
 .idea/
 gemini_workspace/
 Pipfile*
+__pycache__
