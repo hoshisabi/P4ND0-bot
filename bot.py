@@ -117,7 +117,7 @@ characters = {} # Initialize characters dictionary
 def save_characters():
     try:
         # Convert set to list for JSON serialization
-        serializable_characters = {k: list(v) for k, v in characters.items()}
+        serializable_characters = {str(k): list(v) for k, v in characters.items()} # Ensure keys are strings for JSON
         with open(CHARACTERS_FILE, 'w') as f:
             json.dump(serializable_characters, f, indent=4)
         print(f"Characters saved to {CHARACTERS_FILE}")
@@ -131,40 +131,42 @@ def load_characters():
             with open(CHARACTERS_FILE, 'r') as f:
                 loaded_data = json.load(f)
                 # Convert list back to set
-                characters = {k: set(v) for k, v in loaded_data.items()}
+                characters = {int(k) if k.isdigit() else k: set(v) for k, v in loaded_data.items()} # Convert keys back to int if they were IDs
             print(f"Characters loaded from {CHARACTERS_FILE}")
         else:
             print(f"{CHARACTERS_FILE} not found. Starting with empty characters.")
-            characters = {} # Ensure characters is empty if file doesn't exist
+            characters = {}
     except Exception as e:
         print(f"Error loading characters from file: {e}")
-        characters = {} # Fallback to empty characters on error
+        characters = {}
 
 
 # --- Watched Schedules Persistence Functions (using local JSON file) ---
 def save_watched_schedules():
     try:
-        # watched_schedules contains message_id (int) and last_sessions_data (list of dicts)
-        # This structure is already JSON serializable
+        # channel_id keys need to be strings for JSON if they are ints/longs
+        serializable_watched_schedules = {str(k): v for k, v in watched_schedules.items()}
         with open(WATCHED_SCHEDULES_FILE, 'w') as f:
-            json.dump(watched_schedules, f, indent=4)
+            json.dump(serializable_watched_schedules, f, indent=4)
         print(f"Watched schedules saved to {WATCHED_SCHEDULES_FILE}")
     except Exception as e:
         print(f"Error saving watched schedules to file: {e}")
 
 def load_watched_schedules():
-    global watched_schedules # Declare global to modify the outer dictionary
+    global watched_schedules
     try:
         if os.path.exists(WATCHED_SCHEDULES_FILE):
             with open(WATCHED_SCHEDULES_FILE, 'r') as f:
-                watched_schedules = json.load(f)
+                loaded_data = json.load(f)
+                # Convert channel_id keys back to int
+                watched_schedules = {int(k): v for k, v in loaded_data.items()}
             print(f"Watched schedules loaded from {WATCHED_SCHEDULES_FILE}")
         else:
             print(f"{WATCHED_SCHEDULES_FILE} not found. Starting with no watched channels.")
-            watched_schedules = {} # Ensure watched_schedules is empty if file doesn't exist
+            watched_schedules = {}
     except Exception as e:
         print(f"Error loading watched schedules from file: {e}")
-        watched_schedules = {} # Fallback to empty schedules on error
+        watched_schedules = {}
 
 
 # --- Discord Bot Events ---
@@ -175,6 +177,7 @@ async def on_ready():
     load_characters()
     load_watched_schedules()
     update_warhorn_schedule.start()
+
 
 @bot.event
 async def on_message(message):
@@ -187,7 +190,7 @@ async def character(ctx, url: str = None, user: discord.User = commands.paramete
     mychars = characters.setdefault(name, set())
     if url:
         mychars.add(url)
-        save_characters() # Save characters after modification
+        save_characters()
         await ctx.send(f"Saving {url} for {name}.")
         print(characters)
     else:
@@ -196,9 +199,6 @@ async def character(ctx, url: str = None, user: discord.User = commands.paramete
             desc_text += f"\t{mychar}\n"
         await ctx.send(desc_text)
         print(desc_text)
-
-    # Note: Sending `characters` directly can be very verbose for large datasets
-    # await ctx.send(characters)
 
 
 @bot.command()
@@ -261,7 +261,7 @@ async def watch(ctx):
         "message_id": message.id,
         "last_sessions_data": sessions_data
     }
-    save_watched_schedules() # Save watched schedules after modification
+    save_watched_schedules()
     print(f"Set to watch channel {ctx.channel.id} with message ID {message.id}.")
 
 
@@ -275,13 +275,13 @@ async def unwatch(ctx):
             await message.unpin()
             await message.delete()
             del watched_schedules[ctx.channel.id]
-            save_watched_schedules() # Save watched schedules after modification
+            save_watched_schedules()
             await ctx.send("Stopped watching this channel and removed the schedule message.")
             print(f"Stopped watching channel {ctx.channel.id}.")
         except discord.NotFound:
             await ctx.send("No schedule message found to unwatch in this channel.")
-            del watched_schedules[ctx.channel.id] # Clear stale entry in memory
-            save_watched_schedules() # Save updated state to file
+            del watched_schedules[ctx.channel.id]
+            save_watched_schedules()
         except discord.Forbidden:
             await ctx.send("I don't have permissions to unpin/delete messages in this channel!")
         except Exception as e:
@@ -313,17 +313,37 @@ async def update_warhorn_schedule():
     if not watched_schedules:
         print("No channels are being watched for schedules.")
         return
-    
+
     for channel_id, info in list(watched_schedules.items()):
         message_id = info["message_id"]
         last_sessions_data = info["last_sessions_data"]
         
-        channel = bot.get_channel(channel_id)
+        channel = bot.get_channel(channel_id) # Try cache first
         if not channel:
-            print(f"Watched channel {channel_id} not found, removing from watched_schedules.")
-            del watched_schedules[channel_id]
-            save_watched_schedules()
-            continue
+            print(f"Channel {channel_id} not in cache. Attempting to fetch via API...")
+            try:
+                channel = await bot.fetch_channel(channel_id) # Fallback to API fetch
+                print(f"Successfully fetched channel {channel_id} via API.")
+            except discord.NotFound:
+                print(f"Channel {channel_id} not found via API. It might have been deleted or bot removed from guild. Removing from watched_schedules.")
+                del watched_schedules[channel_id]
+                save_watched_schedules()
+                continue
+            except discord.Forbidden:
+                print(f"Bot forbidden from accessing channel {channel_id} via API. Removing from watched_schedules.")
+                del watched_schedules[channel_id]
+                save_watched_schedules()
+                continue
+            except Exception as e:
+                print(f"Unexpected error fetching channel {channel_id}: {e}. Skipping update for this channel.")
+                continue
+
+        # If we reach here, 'channel' object should be valid
+        if not channel: # Final check in case of unexpected None after fetch attempts
+             print(f"Could not retrieve channel {channel_id} even after API fetch attempt. Removing from watched_schedules.")
+             del watched_schedules[channel_id]
+             save_watched_schedules()
+             continue
         
         try:
             new_embed, new_sessions_data = get_warhorn_embed(False)
@@ -357,7 +377,8 @@ async def update_warhorn_schedule():
 async def before_update_warhorn_schedule():
     await bot.wait_until_ready()
     print("Warhorn schedule update loop ready to start.")
-    await asyncio.sleep(5) # <--- ADD THIS LINE (5-10 seconds is usually sufficient)
-    print("Finished initial delay for cache.") # Added for debug clarity
+    await asyncio.sleep(5) # Keep this delay, it helps generally with initial cache population
+    print("Finished initial delay for cache.")
+
 
 bot.run(discord_token)
