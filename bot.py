@@ -2,7 +2,6 @@ import datetime
 import json
 import os
 import random
-import re
 import typing
 from datetime import datetime, timezone
 import asyncio
@@ -201,6 +200,8 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async
             key=lambda x: datetime.fromisoformat(x["startsAt"].replace("Z", "+00:00"))
         )
 
+        print(f"Initial sessions fetched: {len(initial_sessions_data)} sessions.") # DIAGNOSTIC PRINT
+
         if not initial_sessions_data:
             embed = discord.Embed(title="Upcoming Warhorn Events", description="No upcoming sessions found.", color=discord.Color.blue())
             return embed, initial_sessions_data
@@ -212,16 +213,18 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async
                 detailed_session_result = warhorn_client.get_single_event_session(session_summary["id"])
                 if "data" in detailed_session_result and "eventSession" in detailed_session_result["data"]:
                     detailed_sessions_data.append(detailed_session_result["data"]["eventSession"])
+                    print(f"Successfully fetched detailed data for session ID {session_summary['id']}.") # DIAGNOSTIC PRINT
                 else:
-                    print(f"Warning: Could not fetch detailed data for session ID {session_summary['id']}. Skipping.")
+                    print(f"Warning: Could not fetch detailed data for session ID {session_summary['id']} (missing 'data' or 'eventSession'). Response: {detailed_session_result}. Skipping.") # DIAGNOSTIC PRINT
             except Exception as e:
-                print(f"Error fetching detailed data for session ID {session_summary['id']}: {e}. Skipping.")
+                print(f"Error fetching detailed data for session ID {session_summary['id']}: {e}. Skipping.") # DIAGNOSTIC PRINT
         
-        # Sort again by startsAt to ensure correct order after fetching individually
-        detailed_sessions_data = sorted(
-            detailed_sessions_data,
-            key=lambda x: datetime.fromisoformat(x["startsAt"].replace("Z", "+00:00"))
-        )
+        print(f"Detailed sessions fetched: {len(detailed_sessions_data)} sessions after individual calls.") # DIAGNOSTIC PRINT
+
+        if not detailed_sessions_data: # If after individual calls, we still have no data to display
+            print("No detailed sessions data available after individual fetches. Returning empty schedule.") # DIAGNOSTIC PRINT
+            embed = discord.Embed(title="Upcoming Warhorn Events", description="No detailed session information could be retrieved.", color=discord.Color.orange())
+            return embed, [] # Return an empty list for sessions data.
 
 
         for session in detailed_sessions_data: # Iterate over the detailed data
@@ -253,7 +256,7 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async
             parsed_player_names = []
             for signup in session["playerSignups"]:
                 full_player_name = signup["user"]["name"]
-                # Regex to match "DiscordTag (Real Name)" or just "Name"
+                # Regex to match "DiscordTag (Real Name)" or just "Name)"
                 match = re.match(r"^(.*?)(?:\s*\((.*)\))?$", full_player_name)
                 if match:
                     discord_tag_or_primary_name = match.group(1).strip()
@@ -298,11 +301,11 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async
             
             session_block += "\n" 
 
-            desc_text += session_block
+            desc_text += session_block # This line appends to desc_text
 
         embed = discord.Embed(
             title="Upcoming Warhorn Events",
-            description=desc_text,
+            description=desc_text, # This is the final description
             color=discord.Color.blue(),
             url=f"https://warhorn.net/events/{pandodnd_slug}/schedule"
         )
