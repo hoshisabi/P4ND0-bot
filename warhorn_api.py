@@ -9,6 +9,8 @@ load_dotenv()
 WARHORN_APPLICATION_TOKEN = os.getenv("WARHORN_APPLICATION_TOKEN")
 WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
 
+# Corrected event_sessions_query to use startsAfter and ISO8601DateTime
+# MODIFIED: Added 'links { url name }' selection
 event_sessions_query = """
 query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
   eventSessions(events: $events, startsAfter: $startsAfter) {
@@ -35,40 +37,10 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
           name
         }
       }
-    }
-  }
-}
-"""
-
-# UPDATED: single_event_session_query to include 'links' and its 'url' and 'name'
-single_event_session_query = """
-query SingleEventSession($id: ID!) {
-  eventSession(id: $id) {
-    id
-    name
-    startsAt
-    location
-    maxPlayers
-    availablePlayerSeats
-    gmSignups {
-      user {
+      links { # NEW: Request links directly
+        url
         name
       }
-    }
-    playerSignups {
-      user {
-        name
-      }
-    }
-    scenario {
-      name
-      gameSystem {
-        name
-      }
-    }
-    links { # ADDED: Requesting links
-      url # ADDED: Requesting the URL from the link
-      name # ADDED: Requesting the name of the link
     }
   }
 }
@@ -104,25 +76,15 @@ class WarhornClient:
         current_utc_time = datetime.now(timezone.utc).isoformat()
         return self.run_query(event_sessions_query, variables={"events": [event_slug], "startsAfter": current_utc_time})
 
-    def get_single_event_session(self, session_id: str):
-        return self.run_query(single_event_session_query, variables={"id": session_id})
+    # REMOVED: get_single_event_session method as it's no longer needed
 
 if __name__ == "__main__":
     client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
     pandodnd_slug = "pandodnd"
     try:
         print(f"Attempting to fetch event sessions for slug: {pandodnd_slug}")
-        sessions_data = client.get_event_sessions(pandodnd_slug)
+        sessions = client.get_event_sessions(pandodnd_slug)
         print("Successfully fetched event sessions:")
-        print(json.dumps(sessions_data, indent=2))
-
-        # Example of fetching a single session by ID if get_event_sessions works
-        if sessions_data and "data" in sessions_data and "eventSessions" in sessions_data["data"] and sessions_data["data"]["eventSessions"]["nodes"]:
-            first_session_id = sessions_data["data"]["eventSessions"]["nodes"][0]["id"]
-            print(f"\nAttempting to fetch single session with ID: {first_session_id}")
-            single_session_data = client.get_single_event_session(first_session_id)
-            print("Successfully fetched single session:")
-            print(json.dumps(single_session_data, indent=2))
-
+        print(json.dumps(sessions, indent=2))
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching data: {e}")
+        print(f"Error fetching event sessions: {e}")

@@ -5,6 +5,7 @@ import random
 import typing
 from datetime import datetime, timezone
 import asyncio
+import re # Import re for regex operations
 
 import discord
 from discord.ext import commands, tasks
@@ -188,46 +189,27 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async
 """
     pandodnd_slug = "pandodnd"
     try:
-        # First, get basic session data including IDs
+        # Get all session data, including links, in a single call
         initial_result = warhorn_client.get_event_sessions(pandodnd_slug)
 
         if "data" not in initial_result or "eventSessions" not in initial_result["data"] or "nodes" not in initial_result["data"]["eventSessions"]:
             print("Unexpected Warhorn API response structure or no data from initial fetch.")
             return discord.Embed(title="Schedule Error", description="Could not retrieve schedule from Warhorn. Please try again later.", color=discord.Color.red()), []
 
-        initial_sessions_data = sorted(
+        # The initial_sessions_data now contains the 'links' directly
+        sessions_to_display = sorted(
             initial_result["data"]["eventSessions"]["nodes"],
             key=lambda x: datetime.fromisoformat(x["startsAt"].replace("Z", "+00:00"))
         )
 
-        print(f"Initial sessions fetched: {len(initial_sessions_data)} sessions.") # DIAGNOSTIC PRINT
+        # Removed all diagnostic print statements and detailed_sessions_data logic
 
-        if not initial_sessions_data:
+        if not sessions_to_display:
             embed = discord.Embed(title="Upcoming Warhorn Events", description="No upcoming sessions found.", color=discord.Color.blue())
-            return embed, initial_sessions_data
-
-        # NEW LOGIC: Fetch full session data including links for each session
-        detailed_sessions_data = []
-        for session_summary in initial_sessions_data:
-            try:
-                detailed_session_result = warhorn_client.get_single_event_session(session_summary["id"])
-                if "data" in detailed_session_result and "eventSession" in detailed_session_result["data"]:
-                    detailed_sessions_data.append(detailed_session_result["data"]["eventSession"])
-                    print(f"Successfully fetched detailed data for session ID {session_summary['id']}.") # DIAGNOSTIC PRINT
-                else:
-                    print(f"Warning: Could not fetch detailed data for session ID {session_summary['id']} (missing 'data' or 'eventSession'). Response: {detailed_session_result}. Skipping.") # DIAGNOSTIC PRINT
-            except Exception as e:
-                print(f"Error fetching detailed data for session ID {session_summary['id']}: {e}. Skipping.") # DIAGNOSTIC PRINT
-        
-        print(f"Detailed sessions fetched: {len(detailed_sessions_data)} sessions after individual calls.") # DIAGNOSTIC PRINT
-
-        if not detailed_sessions_data: # If after individual calls, we still have no data to display
-            print("No detailed sessions data available after individual fetches. Returning empty schedule.") # DIAGNOSTIC PRINT
-            embed = discord.Embed(title="Upcoming Warhorn Events", description="No detailed session information could be retrieved.", color=discord.Color.orange())
-            return embed, [] # Return an empty list for sessions data.
+            return embed, sessions_to_display
 
 
-        for session in detailed_sessions_data: # Iterate over the detailed data
+        for session in sessions_to_display: # Iterate over the now-complete session data
             session_name = session["name"]
             
             warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule" # Default to main schedule link
@@ -309,7 +291,7 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async
             color=discord.Color.blue(),
             url=f"https://warhorn.net/events/{pandodnd_slug}/schedule"
         )
-        return embed, detailed_sessions_data # Return the detailed data
+        return embed, sessions_to_display # Return the sessions data that was actually used
 
     except requests.exceptions.RequestException as e:
         print(f"Error fetching Warhorn schedule: {e}")
@@ -323,7 +305,7 @@ async def get_warhorn_embed_and_data(full: bool): # Changed to async
 @bot.command()
 async def schedule(ctx, full: typing.Optional[bool] = False):
     """Pulls the most recent schedule of upcoming events from Warhorn displayed in your local time."""
-    embed_to_send, _ = await get_warhorn_embed_and_data(full) # Changed to await get_warhorn_embed_and_data
+    embed_to_send, _ = await get_warhorn_embed_and_data(full) 
 
     if embed_to_send.color == discord.Color.red():
         await ctx.send(embed=embed_to_send)
@@ -445,7 +427,7 @@ async def quote(ctx):
 @bot.command()
 async def watch(ctx):
     """Watches this channel for Warhorn schedule updates, ensuring the schedule message is always the most recent."""
-    embed_to_send, sessions_data = await get_warhorn_embed_and_data(False) # Changed to await get_warhorn_embed_and_data
+    embed_to_send, sessions_data = await get_warhorn_embed_and_data(False)
 
     if embed_to_send.color == discord.Color.red():
         await ctx.send(embed=embed_to_send)
@@ -555,7 +537,7 @@ async def update_warhorn_schedule():
 
     print("Running scheduled Warhorn schedule update check...")
     
-    new_embed, new_sessions_data = await get_warhorn_embed_and_data(False) # Changed to await get_warhorn_embed_and_data
+    new_embed, new_sessions_data = await get_warhorn_embed_and_data(False) 
 
     if new_embed.color == discord.Color.red():
         print("Scheduled update: Error fetching new Warhorn data. Skipping update for all channels.")
