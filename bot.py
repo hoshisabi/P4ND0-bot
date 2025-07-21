@@ -9,10 +9,8 @@ import discord
 import feedparser
 import markdownify
 import requests
-from mysql.connector import Error
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
-import mysql.connector
 
 # Import the WarhornClient and API constants from your warhorn_api.py file
 from warhorn_api import WarhornClient, WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN
@@ -21,11 +19,11 @@ from warhorn_api import WarhornClient, WARHORN_API_ENDPOINT, WARHORN_APPLICATION
 load_dotenv()
 
 discord_token = os.getenv("DISCORD_TOKEN")
-dbhost = os.getenv("DATABASE_HOST")
-dbuser = os.getenv("DATABASE_USER")
-dbpass = os.getenv("DATABASE_PASS")
-dbname = os.getenv("DATABASE_NAME")
 rssfeed = os.getenv("FEED_URL")
+
+# --- Define JSON File Paths for Persistence ---
+CHARACTERS_FILE = "characters.json"
+WATCHED_SCHEDULES_FILE = "watched_schedules.json"
 
 # Initialize the WarhornClient globally
 warhorn_client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
@@ -112,129 +110,61 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='$', description=description, intents=intents)
 
 
-# --- Character Persistence Functions (with corrections) ---
+# --- Character Persistence Functions (using local JSON file) ---
 characters = {} # Initialize characters dictionary
 
 def save_characters():
-    cnx = None # Initialize cnx to None
     try:
-        print("Attempting to connect to DB for saving characters...")
-        cnx = mysql.connector.connect(host=dbhost,
-                                      database=dbname,
-                                      user=dbuser,
-                                      password=dbpass)
-        if cnx.is_connected():
-            print("Successfully connected to DB for saving characters.")
-            cursor = cnx.cursor()
-            insert_sql = "INSERT INTO characters (discord_id, character_url) VALUES (%s, %s);"
-            delete_sql = "DELETE FROM characters WHERE discord_id = %s;"
-
-            for discord_id, url_set in characters.items():
-                cursor.execute(delete_sql, (discord_id,))
-                for url in url_set:
-                    cursor.execute(insert_sql, (discord_id, url))
-            cnx.commit()
-            print("Characters saved to DB.")
-    except Error as e:
-        print(f"Error saving characters to DB: {e}")
-    finally:
-        if cnx and cnx.is_connected():
-            cursor.close()
-            cnx.close()
-            print("DB connection closed after saving characters.")
+        # Convert set to list for JSON serialization
+        serializable_characters = {k: list(v) for k, v in characters.items()}
+        with open(CHARACTERS_FILE, 'w') as f:
+            json.dump(serializable_characters, f, indent=4)
+        print(f"Characters saved to {CHARACTERS_FILE}")
+    except Exception as e:
+        print(f"Error saving characters to file: {e}")
 
 def load_characters():
-    cnx = None # Initialize cnx to None
+    global characters # Declare global to modify the outer dictionary
     try:
-        print("Attempting to connect to DB for loading characters...")
-        cnx = mysql.connector.connect(host=dbhost,
-                                      database=dbname,
-                                      user=dbuser,
-                                      password=dbpass)
-        if cnx.is_connected():
-            print("Successfully connected to DB for loading characters.")
-            cursor = cnx.cursor()
-            sql = "SELECT discord_id, character_url FROM characters;"
-            cursor.execute(sql)
-            
-            characters.clear() # Clear existing in-memory data before loading
-            for discord_id, url in cursor:
-                mychars = characters.setdefault(discord_id, set())
-                mychars.add(url)
-            print("Characters loaded from DB.")
-    except Error as e:
-        print(f"Error loading characters from DB: {e}")
-    finally:
-        if cnx and cnx.is_connected():
-            cursor.close()
-            cnx.close()
-            print("DB connection closed after loading characters.")
+        if os.path.exists(CHARACTERS_FILE):
+            with open(CHARACTERS_FILE, 'r') as f:
+                loaded_data = json.load(f)
+                # Convert list back to set
+                characters = {k: set(v) for k, v in loaded_data.items()}
+            print(f"Characters loaded from {CHARACTERS_FILE}")
+        else:
+            print(f"{CHARACTERS_FILE} not found. Starting with empty characters.")
+            characters = {} # Ensure characters is empty if file doesn't exist
+    except Exception as e:
+        print(f"Error loading characters from file: {e}")
+        characters = {} # Fallback to empty characters on error
 
 
-# --- Watched Schedules Persistence Functions (NEW) ---
+# --- Watched Schedules Persistence Functions (using local JSON file) ---
 def save_watched_schedules():
-    cnx = None # Initialize cnx to None
     try:
-        print("Attempting to connect to DB for saving watched schedules...")
-        cnx = mysql.connector.connect(host=dbhost,
-                                      database=dbname,
-                                      user=dbuser,
-                                      password=dbpass)
-        if cnx.is_connected():
-            print("Successfully connected to DB for saving watched schedules.")
-            cursor = cnx.cursor()
-            # Clear existing data and insert current state for simplicity
-            delete_all_sql = "DELETE FROM watched_schedules;"
-            cursor.execute(delete_all_sql)
-            
-            insert_sql = "INSERT INTO watched_schedules (channel_id, message_id, last_sessions_data_json) VALUES (%s, %s, %s);"
-            
-            for channel_id, info in watched_schedules.items():
-                message_id = info["message_id"]
-                # Serialize the list of dictionaries to a JSON string
-                last_sessions_data_json = json.dumps(info["last_sessions_data"])
-                cursor.execute(insert_sql, (channel_id, message_id, last_sessions_data_json))
-            
-            cnx.commit()
-            print("Watched schedules saved to DB.")
-    except Error as e:
-        print(f"Error saving watched schedules to DB: {e}")
-    finally:
-        if cnx and cnx.is_connected():
-            cursor.close()
-            cnx.close()
-            print("DB connection closed after saving watched schedules.")
+        # watched_schedules contains message_id (int) and last_sessions_data (list of dicts)
+        # This structure is already JSON serializable
+        with open(WATCHED_SCHEDULES_FILE, 'w') as f:
+            json.dump(watched_schedules, f, indent=4)
+        print(f"Watched schedules saved to {WATCHED_SCHEDULES_FILE}")
+    except Exception as e:
+        print(f"Error saving watched schedules to file: {e}")
 
 def load_watched_schedules():
-    cnx = None # Initialize cnx to None
+    global watched_schedules # Declare global to modify the outer dictionary
     try:
-        print("Attempting to connect to DB for loading watched schedules...")
-        cnx = mysql.connector.connect(host=dbhost,
-                                      database=dbname,
-                                      user=dbuser,
-                                      password=dbpass)
-        if cnx.is_connected():
-            print("Successfully connected to DB for loading watched schedules.")
-            cursor = cnx.cursor()
-            sql = "SELECT channel_id, message_id, last_sessions_data_json FROM watched_schedules;"
-            cursor.execute(sql)
-            
-            watched_schedules.clear() # Clear existing in-memory data before loading
-            for channel_id, message_id, last_sessions_data_json in cursor:
-                # Deserialize the JSON string back to a Python object
-                last_sessions_data = json.loads(last_sessions_data_json)
-                watched_schedules[channel_id] = {
-                    "message_id": message_id,
-                    "last_sessions_data": last_sessions_data
-                }
-            print("Watched schedules loaded from DB.")
-    except Error as e:
-        print(f"Error loading watched schedules from DB: {e}")
-    finally:
-        if cnx and cnx.is_connected():
-            cursor.close()
-            cnx.close()
-            print("DB connection closed after loading watched schedules.")
+        if os.path.exists(WATCHED_SCHEDULES_FILE):
+            with open(WATCHED_SCHEDULES_FILE, 'r') as f:
+                watched_schedules = json.load(f)
+            print(f"Watched schedules loaded from {WATCHED_SCHEDULES_FILE}")
+        else:
+            print(f"{WATCHED_SCHEDULES_FILE} not found. Starting with no watched channels.")
+            watched_schedules = {} # Ensure watched_schedules is empty if file doesn't exist
+    except Exception as e:
+        print(f"Error loading watched schedules from file: {e}")
+        watched_schedules = {} # Fallback to empty schedules on error
+
 
 # --- Discord Bot Events ---
 @bot.event
@@ -267,7 +197,8 @@ async def character(ctx, url: str = None, user: discord.User = commands.paramete
         await ctx.send(desc_text)
         print(desc_text)
 
-    await ctx.send(characters)
+    # Note: Sending `characters` directly can be very verbose for large datasets
+    # await ctx.send(characters)
 
 
 @bot.command()
@@ -350,7 +281,7 @@ async def unwatch(ctx):
         except discord.NotFound:
             await ctx.send("No schedule message found to unwatch in this channel.")
             del watched_schedules[ctx.channel.id] # Clear stale entry in memory
-            save_watched_schedules() # Save updated state to DB
+            save_watched_schedules() # Save updated state to file
         except discord.Forbidden:
             await ctx.send("I don't have permissions to unpin/delete messages in this channel!")
         except Exception as e:
