@@ -22,23 +22,11 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
       gmSignups {
         user {
           name
-          # discordUser { # This field caused the error
-          #   id
-          #   username
-          #   discriminator
-          #   tag
-          # }
         }
       }
       playerSignups {
         user {
           name
-          # discordUser { # This field caused the error
-          #   id
-          #   username
-          #   discriminator
-          #   tag
-          # }
         }
       }
       scenario {
@@ -46,6 +34,21 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
         gameSystem {
           name
         }
+        coverImageUrl # ADDED: Fetch cover image URL
+      }
+    }
+  }
+}
+"""
+
+# NEW QUERY FOR WAITLIST
+waitlist_query = """
+query SessionWaitlistEntries($eventSessionId: ID!) {
+  sessionWaitlistEntries(eventSession: $eventSessionId) {
+    nodes {
+      id
+      user {
+        name
       }
     }
   }
@@ -69,7 +72,7 @@ class WarhornClient:
 
         response = requests.post(self.api_endpoint, headers=headers, data=json.dumps(payload))
         print(f"Warhorn API response status: {response.status_code}")
-        print(f"Warhorn API raw response: {response.text}")
+        # print(f"Warhorn API raw response: {response.text}") # Keep this for debugging if needed, but remove for cleaner output
         response.raise_for_status()
         try:
             return response.json()
@@ -82,13 +85,35 @@ class WarhornClient:
         current_utc_time = datetime.now(timezone.utc).isoformat()
         return self.run_query(event_sessions_query, variables={"events": [event_slug], "startsAfter": current_utc_time})
 
+    # NEW METHOD TO GET WAITLIST
+    def get_session_waitlist(self, session_id):
+        try:
+            result = self.run_query(waitlist_query, variables={"eventSessionId": session_id})
+            if "data" in result and "sessionWaitlistEntries" in result["data"]:
+                return result["data"]["sessionWaitlistEntries"]["nodes"]
+            return []
+        except Exception as e:
+            print(f"Error fetching waitlist for session {session_id}: {e}")
+            return []
+
 if __name__ == "__main__":
     client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
     pandodnd_slug = "pandodnd"
     try:
         print(f"Attempting to fetch event sessions for slug: {pandodnd_slug}")
-        sessions = client.get_event_sessions(pandodnd_slug)
+        sessions_data = client.get_event_sessions(pandodnd_slug)
         print("Successfully fetched event sessions:")
-        print(json.dumps(sessions, indent=2))
+        # print(json.dumps(sessions_data, indent=2)) # Temporarily removed for cleaner output
+        
+        # Example of fetching waitlist for the first session (if any)
+        if sessions_data and sessions_data["data"]["eventSessions"]["nodes"]:
+            first_session_id = sessions_data["data"]["eventSessions"]["nodes"][0]["id"]
+            print(f"\nAttempting to fetch waitlist for session ID: {first_session_id}")
+            # This would typically be awaited in an async context if run outside of __main__ block
+            # For this simple example, we're calling it synchronously.
+            waitlist = client.get_session_waitlist(first_session_id) 
+            print("Successfully fetched waitlist:")
+            print(json.dumps(waitlist, indent=2))
+
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching event sessions: {e}")
+        print(f"Error fetching data: {e}")

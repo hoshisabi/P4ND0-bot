@@ -12,12 +12,12 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
 # Import the WarhornClient from your warhorn_api.py file
-from warhorn_api import WarhornClient, event_sessions_query
+from warhorn_api import WarhornClient # event_sessions_query is implicitly used by WarhornClient
 
 load_dotenv()
 
 discord_token = os.getenv("DISCORD_TOKEN")
-rssfeed = os.getenv("FEED_URL")
+rssfeed = os.getenv("FEED_URL") # This is not currently used for images, coverImageUrl is from GraphQL
 
 
 # --- Define JSON File Paths for Persistence ---
@@ -182,7 +182,7 @@ async def on_ready():
 
 
 # --- get_warhorn_embed helper function ---
-def get_warhorn_embed_and_data(full: bool):
+async def get_warhorn_embed_and_data(full: bool): # Changed to async because of waitlist query
     desc_text = """The following games are upcoming on this server, click on a link to schedule a seat.
 
 """
@@ -190,7 +190,7 @@ def get_warhorn_embed_and_data(full: bool):
     try:
         # The warhorn_api.py's get_event_sessions already uses 'startsAfter'
         result = warhorn_client.get_event_sessions(pandodnd_slug)
-        print(f"Warhorn API response: {json.dumps(result, indent=2)}")
+        # print(f"Warhorn API response: {json.dumps(result, indent=2)}") # Temporarily removed for cleaner output
 
         if "data" not in result or "eventSessions" not in result["data"] or "nodes" not in result["data"]["eventSessions"]:
             print("Unexpected Warhorn API response structure or no data.")
@@ -204,17 +204,19 @@ def get_warhorn_embed_and_data(full: bool):
 
         if not sessions_data:
             embed = discord.Embed(title="Upcoming Warhorn Events", description="No upcoming sessions found.", color=discord.Color.blue())
-            embed.set_footer(text="Updates every 10 minutes or on channel activity.")
+            # embed.set_footer(text="Updates every 10 minutes or on channel activity.") # Removed footer as per markdown
             return embed, sessions_data
 
         for session in sessions_data:
             session_name = session["name"]
             session_id = session["id"].replace("EventSession-", "")
             session_start_str = session["startsAt"]
-            # These are no longer used for display, but kept if needed for other logic:
             session_location = session["location"] 
             scenario_name = session["scenario"]["name"] if session["scenario"] else "N/A"
             game_system_name = session["scenario"]["gameSystem"]["name"] if session["scenario"] and session["scenario"]["gameSystem"] else "N/A"
+            
+            # --- NEW: Get Scenario Cover Image ---
+            cover_image_url = session["scenario"]["coverImageUrl"] if session["scenario"] and session["scenario"]["coverImageUrl"] else None
 
             max_players = session["maxPlayers"]
             available_seats = session["availablePlayerSeats"]
@@ -247,14 +249,37 @@ def get_warhorn_embed_and_data(full: bool):
             else:
                 players_list_str = "No players signed up"
 
-            # Determine empty slots wording
-            empty_slots_str = ""
-            if available_seats > 0:
-                empty_slots_str = f" ({available_seats} empty slots)"
-            elif available_seats == 0 and max_players is not None and max_players > 0: # If max_players is also 0 or None, it means unlimited or not set, so don't show "0 empty slots"
-                empty_slots_str = " (0 empty slots)"
+
+            # --- NEW: Waitlist Logic ---
+            waitlist_players = await warhorn_client.get_session_waitlist(session["id"]) # Use full session ID here
+            parsed_waitlist_names = []
+            if waitlist_players:
+                for entry in waitlist_players:
+                    full_waitlist_name = entry["user"]["name"]
+                    match = re.match(r"^(.*?)(?:\s*\((.*)\))?$", full_waitlist_name)
+                    if match:
+                        discord_tag_or_primary_name = match.group(1).strip()
+                        real_name_in_parentheses = match.group(2)
+                        if real_name_in_parentheses:
+                            parsed_waitlist_names.append(f"{real_name_in_parentheses} ({discord_tag_or_primary_name})")
+                        else:
+                            parsed_waitlist_names.append(discord_tag_or_primary_name)
+                    else:
+                        parsed_waitlist_names.append(full_waitlist_name)
+            
+            # Determine empty slots / waitlist wording based on new markdown
+            status_line = ""
+            if parsed_waitlist_names:
+                waitlist_str = ", ".join(parsed_waitlist_names)
+                status_line = f"• **Waitlist:** {waitlist_str}"
+            elif available_seats > 0:
+                status_line = f"• **Available:** {available_seats} empty slots"
+            elif max_players is not None and max_players > 0: # If max_players is also 0 or None, it means unlimited or not set, so don't show "0 empty slots"
+                status_line = "• **Available:** 0 empty slots"
             elif max_players is None and available_seats == 0: # Handle cases where max_players is null/none, but there are no available seats
-                empty_slots_str = " (0 empty slots)"
+                status_line = "• **Available:** 0 empty slots"
+            else:
+                status_line = "• **Available:** Unknown slots" # Fallback for unclear cases
 
 
             # Convert to Unix timestamp for Discord's specialized time handling
@@ -270,7 +295,15 @@ def get_warhorn_embed_and_data(full: bool):
             session_block = f"**[{session_name}]({warhorn_url})**\n"
             session_block += f"• **When:** {time_str}\n"
             session_block += f"• **GM:** {gm_name}\n"
-            session_block += f"• **Players:** {players_list_str}{empty_slots_str}\n" # Updated player line
+            session_block += f"• **Players:** {players_list_str}\n"
+            session_block += f"{status_line}\n" # Conditional status line
+
+            # --- NEW: Include image if available ---
+            if cover_image_url:
+                # Discord will typically scale this to fit thumbnail-like size in embeds,
+                # but direct ![alt](url) can sometimes render larger or as a broken link if too big
+                # For per-session images, this is the most direct way within the description.
+                session_block += f"• ![Scenario Image]({cover_image_url})\n"
             
             session_block += "\n" # Add a newline to separate sessions
 
@@ -282,7 +315,7 @@ def get_warhorn_embed_and_data(full: bool):
             color=discord.Color.blue(),
             url=f"https://warhorn.net/events/{pandodnd_slug}/schedule"
         )
-        embed.set_footer(text="Updates every 10 minutes or on channel activity.")
+        # embed.set_footer(text="Updates every 10 minutes or on channel activity.") # Removed footer as per markdown
         return embed, sessions_data
 
     except requests.exceptions.RequestException as e:
@@ -294,6 +327,17 @@ def get_warhorn_embed_and_data(full: bool):
 
 
 # --- Discord Bot Commands ---
+@bot.command()
+async def schedule(ctx, full: typing.Optional[bool] = False):
+    """Pulls the most recent schedule of upcoming events from Warhorn displayed in your local time."""
+    embed_to_send, _ = await get_warhorn_embed_and_data(full) # Changed to await
+
+    if embed_to_send.color == discord.Color.red():
+        await ctx.send(embed=embed_to_send)
+        return
+    await ctx.send(embed=embed_to_send)
+
+
 @bot.command()
 async def character(ctx, character_url: typing.Optional[str] = None):
     """
@@ -393,17 +437,6 @@ async def character(ctx, character_url: typing.Optional[str] = None):
 
 
 @bot.command()
-async def schedule(ctx, full: typing.Optional[bool] = False):
-    """Pulls the most recent schedule of upcoming events from Warhorn displayed in your local time."""
-    embed_to_send, _ = get_warhorn_embed_and_data(full)
-
-    if embed_to_send.color == discord.Color.red():
-        await ctx.send(embed=embed_to_send)
-        return
-    await ctx.send(embed=embed_to_send)
-
-
-@bot.command()
 async def quote(ctx):
     """Generate a random quote (no parameters)"""
     response = requests.get("https://zenquotes.io/api/random")
@@ -419,7 +452,7 @@ async def quote(ctx):
 @bot.command()
 async def watch(ctx):
     """Watches this channel for Warhorn schedule updates, ensuring the schedule message is always the most recent."""
-    embed_to_send, sessions_data = get_warhorn_embed_and_data(False)
+    embed_to_send, sessions_data = await get_warhorn_embed_and_data(False) # Changed to await
 
     if embed_to_send.color == discord.Color.red():
         await ctx.send(embed=embed_to_send)
@@ -529,7 +562,7 @@ async def update_warhorn_schedule():
 
     print("Running scheduled Warhorn schedule update check...")
     
-    new_embed, new_sessions_data = get_warhorn_embed_and_data(False)
+    new_embed, new_sessions_data = await get_warhorn_embed_and_data(False) # Changed to await
 
     if new_embed.color == discord.Color.red():
         print("Scheduled update: Error fetching new Warhorn data. Skipping update for all channels.")
