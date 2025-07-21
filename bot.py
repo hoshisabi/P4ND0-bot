@@ -274,7 +274,7 @@ The following games are upcoming on this server, click on a link to schedule a s
     pandodnd_slug = "pandodnd"
     try:
         result = warhorn_client.get_event_sessions(pandodnd_slug)
-        # print(f"Warhorn API response: {json.dumps(result, indent=2)}") # Debug print
+        print(f"Warhorn API response: {json.dumps(result, indent=2)}") # Debug print: UNCOMMENTED THIS LINE
 
         if "data" not in result or "eventSessions" not in result["data"] or "nodes" not in result["data"]["eventSessions"]:
             print("Unexpected Warhorn API response structure or no data.")
