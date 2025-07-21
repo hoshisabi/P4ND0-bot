@@ -258,10 +258,10 @@ async def get_warhorn_embed_and_data(full: bool):
             if available_seats > 0:
                 status_line = f"**Status:** {available_seats} slots available!"
             elif waitlist_names: # Checks if the list 'waitlist_names' is not empty
-                status_line = f"**Status:** On waitlist: {', '.join(waitlist_names)} -- join the waitlist to be in line if there is a cancellation"
+                status_line = f"**Status:** On waitlist: {', '.join(waitlist_names)}"
             else:
                 # This branch means available_seats is 0 AND waitlist_names is empty
-                status_line = "**Status:** Full (no waitlist) -- join the waitlist to be in line if there is a cancellation"
+                status_line = "**Status:** Full (no waitlist)"
 
             # Convert to Unix timestamp for Discord's specialized time handling
             utc_dt = datetime.fromisoformat(session_start_str.replace("Z", "+00:00"))
@@ -281,6 +281,7 @@ async def get_warhorn_embed_and_data(full: bool):
 
             desc_text += session_block # This line appends to desc_text
 
+        desc_ext += "\nJoin the waitlist to be next in line if there is a cancellation. Those on the waitlist frequently get a seat.\n"
         embed = discord.Embed(
             title="Upcoming Warhorn Events",
             description=desc_text, # This is the final description
