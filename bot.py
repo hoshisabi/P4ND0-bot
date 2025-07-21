@@ -17,11 +17,6 @@ import asyncio # For the sleep in before_loop
 load_dotenv()
 
 discord_token = os.getenv("DISCORD_TOKEN")
-# Removed MySQL variables entirely as we are using local files for persistence now
-# dbhost = os.getenv("DATABASE_HOST")
-# dbuser = os.getenv("DATABASE_USER")
-# dbpass = os.getenv("DATABASE_PASS")
-# dbname = os.getenv("DATABASE_NAME")
 rssfeed = os.getenv("FEED_URL")
 
 
@@ -366,21 +361,25 @@ async def character(ctx, character_url: typing.Optional[str] = None):
         json_api_url = f"https://character-service.dndbeyond.com/character/v5/character/{character_id}"
 
         try:
+            print(f"Fetching character data from: {json_api_url}") # Debug print
             response = requests.get(json_api_url)
             response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
             char_data = response.json()
 
             if not char_data or "data" not in char_data:
                 await ctx.send("Could not retrieve character data from D&D Beyond. The character might be private or the ID is incorrect.")
+                print(f"D&D Beyond API response missing 'data' key: {char_data}") # Debug print
                 return
 
             char_info = char_data["data"]
             character_name = char_info.get("name", "Unknown Character")
-            # Fallback to username if 'name' is not found or is empty, though 'name' is preferred for character name
             if not character_name and char_info.get("username"):
                  character_name = char_info.get("username")
-
+            
             avatar_url = char_info.get("decorations", {}).get("avatarUrl")
+
+            print(f"Extracted Character Name: {character_name}") # Debug print
+            print(f"Extracted Avatar URL: {avatar_url}") # Debug print
 
             # Check if character already exists for the user and update it
             found = False
@@ -394,18 +393,23 @@ async def character(ctx, character_url: typing.Optional[str] = None):
 
             save_characters()
 
-            embed = discord.Embed(
-                title=f"Character Added/Updated: {character_name}",
-                url=character_url,
-                color=discord.Color.gold()
-            )
-            if avatar_url:
-                embed.set_thumbnail(url=avatar_url)
-            embed.set_footer(text=f"Saved for {ctx.author.display_name}")
+            # Create the embed
+            try:
+                embed = discord.Embed(
+                    title=f"Character Added/Updated: {character_name}",
+                    url=character_url,
+                    color=discord.Color.gold()
+                )
+                if avatar_url:
+                    embed.set_thumbnail(url=avatar_url)
+                embed.set_footer(text=f"Saved for {ctx.author.display_name}")
 
-            # suppress_embeds=True prevents Discord from showing its own preview of the D&D Beyond URL
-            await ctx.send(embed=embed, suppress_embeds=True) 
-            print(f"User {ctx.author.id} added/updated character: {character_name} ({character_url})")
+                print(f"Attempting to send embed: {embed.to_dict()}") # Debug print: See the full embed content
+                await ctx.send(embed=embed, suppress_embeds=True) 
+                print(f"User {ctx.author.id} added/updated character: {character_name} ({character_url})")
+            except Exception as embed_e:
+                await ctx.send(f"An error occurred while preparing or sending the Discord embed: {embed_e}")
+                print(f"Error during embed creation/sending for !character: {embed_e}")
 
         except requests.exceptions.RequestException as e:
             await ctx.send(f"Could not fetch character data due to a network error: {e}")
@@ -424,7 +428,7 @@ async def character(ctx, character_url: typing.Optional[str] = None):
             return
 
         embed = discord.Embed(
-            title=f"{ctx.author.display_name}'s D&D Beyond Characters",
+            title=f"{ctx.author.display_name}'s Saved D&D Beyond Characters", # More specific title
             color=discord.Color.purple()
         )
         description_parts = []
