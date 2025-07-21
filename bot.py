@@ -2,17 +2,19 @@ import datetime
 import json
 import os
 import random
-import re # Import re for regex operations
+import re
 import typing
-from datetime import datetime, timezone # Import timezone for Warhorn API calls
+from datetime import datetime, timezone
+import asyncio
 
 import discord
-import feedparser
-import markdownify # For cleaning RSS summary
 import requests
-from discord.ext import commands, tasks # Import tasks for the loop
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
-import asyncio # For the sleep in before_loop
+from pytz import timezone # Assuming pytz is installed for timezone conversion
+
+# Import the WarhornClient from your warhorn_api.py file
+from warhorn_api import WarhornClient, event_sessions_query # Importing event_sessions_query just for reference, not directly used here for client operations
 
 load_dotenv()
 
@@ -22,28 +24,17 @@ rssfeed = os.getenv("FEED_URL")
 
 # --- Define JSON File Paths for Persistence ---
 CHARACTERS_FILE = "characters.json"
-WATCHED_SCHEDULES_FILE = "watched_schedules.json" # Stores channel_id, message_id
-LAST_WARHORN_SESSIONS_FILE = "last_warhorn_sessions.json" # Stores actual data for comparison
+WATCHED_SCHEDULES_FILE = "watched_schedules.json"
+LAST_WARHORN_SESSIONS_FILE = "last_warhorn_sessions.json"
 
-# Dictionary to store (channel_id, message_id) for watched schedule messages
-# Key: channel_id (int), Value: {"message_id": int, "channel_id": int} (initially)
-# After on_ready, Value will be discord.Message objects for live interaction
 watched_schedules: typing.Dict[int, typing.Union[discord.Message, typing.Dict[str, int]]] = {}
-
-# Dictionary to store the last known Warhorn session data for comparison
-# Key: channel_id (int), Value: list_of_dicts (the raw sessions data from Warhorn)
 last_warhorn_sessions_data: typing.Dict[int, typing.List[typing.Dict]] = {}
-
-# Dictionary to store characters per user
-# Key: user_id (int)
-# Value: list of {"url": original_url, "name": character_name, "avatar_url": avatar_url}
 characters: typing.Dict[int, typing.List[typing.Dict[str, str]]] = {}
 
 
 # --- Persistence Functions (using local JSON files) ---
 def save_watched_schedules():
     try:
-        # Convert discord.Message objects back to dictionaries for serialization
         serializable_watched_schedules = {}
         for channel_id, msg_or_data in watched_schedules.items():
             if isinstance(msg_or_data, discord.Message):
@@ -51,7 +42,7 @@ def save_watched_schedules():
                     "channel_id": msg_or_data.channel.id,
                     "message_id": msg_or_data.id
                 }
-            elif isinstance(msg_or_data, dict): # In case it's still just IDs from load
+            elif isinstance(msg_or_data, dict):
                  serializable_watched_schedules[str(channel_id)] = msg_or_data
         
         with open(WATCHED_SCHEDULES_FILE, 'w') as f:
@@ -66,8 +57,6 @@ def load_watched_schedules():
         if os.path.exists(WATCHED_SCHEDULES_FILE):
             with open(WATCHED_SCHEDULES_FILE, 'r') as f:
                 loaded_data = json.load(f)
-                # Convert channel_id keys back to int
-                # Store as dicts for now; discord.Message objects will be fetched in on_ready
                 watched_schedules = {int(k): v for k, v in loaded_data.items()}
             print(f"Watched schedules loaded from {WATCHED_SCHEDULES_FILE} (IDs only, messages will be fetched).")
         else:
@@ -79,7 +68,6 @@ def load_watched_schedules():
 
 def save_last_warhorn_sessions_data():
     try:
-        # channel_id keys need to be strings for JSON if they are ints/longs
         serializable_data = {str(k): v for k, v in last_warhorn_sessions_data.items()}
         with open(LAST_WARHORN_SESSIONS_FILE, 'w') as f:
             json.dump(serializable_data, f, indent=4)
@@ -93,7 +81,6 @@ def load_last_warhorn_sessions_data():
         if os.path.exists(LAST_WARHORN_SESSIONS_FILE):
             with open(LAST_WARHORN_SESSIONS_FILE, 'r') as f:
                 loaded_data = json.load(f)
-                # Convert channel_id keys back to int
                 last_warhorn_sessions_data = {int(k): v for k, v in loaded_data.items()}
             print(f"Last Warhorn sessions data loaded from {LAST_WARHORN_SESSIONS_FILE}")
         else:
@@ -105,7 +92,6 @@ def load_last_warhorn_sessions_data():
 
 def save_characters():
     try:
-        # Convert user_id keys to strings for JSON serialization
         serializable_characters = {str(k): v for k, v in characters.items()}
         with open(CHARACTERS_FILE, 'w') as f:
             json.dump(serializable_characters, f, indent=4)
@@ -114,12 +100,11 @@ def save_characters():
         print(f"Error saving characters to file: {e}")
 
 def load_characters():
-    global characters # Declare global to modify the outer dictionary
+    global characters
     try:
         if os.path.exists(CHARACTERS_FILE):
             with open(CHARACTERS_FILE, 'r') as f:
                 loaded_data = json.load(f)
-                # Convert user_id keys back to int
                 characters = {int(k): v for k, v in loaded_data.items()}
             print(f"Characters loaded from {CHARACTERS_FILE}")
         else:
@@ -130,70 +115,9 @@ def load_characters():
         characters = {}
 
 
-# --- Warhorn API Related ---
+# --- Warhorn API Client Instantiation (using imported class) ---
 WARHORN_APPLICATION_TOKEN = os.getenv("WARHORN_APPLICATION_TOKEN")
 WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
-
-event_sessions_query = """
-query EventSessions($events: [String!]!, $now: DateTime!) {
-  eventSessions(events: $events, startsAt_gte: $now) {
-    nodes {
-      id
-      name
-      startsAt
-      location
-      maxPlayers
-      availablePlayerSeats
-      gmSignups {
-        user {
-          name
-        }
-      }
-      playerSignups {
-        user {
-          name
-        }
-      }
-      scenario {
-        name
-        gameSystem {
-          name
-        }
-      }
-    }
-  }
-}
-"""
-
-class WarhornClient:
-    def __init__(self, api_endpoint, app_token):
-        self.api_endpoint = api_endpoint
-        self.app_token = app_token
-
-    def run_query(self, query, variables=None):
-        headers = {
-            "Authorization": f"Bearer {self.app_token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-        payload = {"query": query}
-        if variables:
-            payload["variables"] = variables
-
-        response = requests.post(self.api_endpoint, headers=headers, data=json.dumps(payload))
-        response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
-        try:
-            return response.json()
-        except json.JSONDecodeError as e:
-            print(f"JSON decoding error from Warhorn API: {e}")
-            print(f"Warhorn API raw response content: {response.text}")
-            raise
-
-    def get_event_sessions(self, event_slug):
-        # Pass the current UTC time for startsAt_gte filter
-        current_utc_time = datetime.now(timezone.utc).isoformat(timespec='seconds') + 'Z' # ISO 8601 format with Z for UTC
-        return self.run_query(event_sessions_query, variables={"events": [event_slug], "now": current_utc_time})
-
 warhorn_client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
 
 
@@ -204,8 +128,8 @@ but right now, it's just a very basic thing. Look for more capabilities later!
 '''
 
 intents = discord.Intents.default()
-intents.message_content = True # Needed for on_message to read content
-intents.members = True # Needed for certain member-related operations, like fetching members if bot restarts
+intents.message_content = True
+intents.members = True
 
 bot = commands.Bot(command_prefix='$', description=description, intents=intents)
 
@@ -215,30 +139,25 @@ bot = commands.Bot(command_prefix='$', description=description, intents=intents)
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
-    load_characters() # Load characters on startup
-    load_watched_schedules() # Load watched schedules (as dicts with IDs)
-    load_last_warhorn_sessions_data() # Load last known Warhorn data
+    load_characters()
+    load_watched_schedules()
+    load_last_warhorn_sessions_data()
 
-    # After loading, try to fetch the actual message objects for watched_schedules
-    # This loop ensures that the bot can interact with the messages it's supposed to watch
     channels_to_remove = []
-    # Iterate over a copy of the dictionary because we might modify it during iteration
     for channel_id, data_or_message in list(watched_schedules.items()): 
-        if isinstance(data_or_message, discord.Message): # Already a Message object, skip
+        if isinstance(data_or_message, discord.Message):
             continue 
 
-        # It's a dictionary with IDs, so try to fetch the actual Message object
         message_id = data_or_message.get("message_id")
-        # channel_id is the key, so we already have it
 
         try:
-            channel = bot.get_channel(channel_id) # Try cache first
-            if not channel: # Not in cache, fetch
+            channel = bot.get_channel(channel_id)
+            if not channel:
                 channel = await bot.fetch_channel(channel_id)
             
             if channel:
                 message = await channel.fetch_message(message_id)
-                watched_schedules[channel_id] = message # Replace dict with actual Message object
+                watched_schedules[channel_id] = message
                 print(f"Successfully fetched watched message {message_id} in channel {channel_id}.")
             else:
                 print(f"Channel {channel_id} not found for watched message {message_id}. Removing from watch list.")
@@ -253,36 +172,39 @@ async def on_ready():
             print(f"An error occurred while fetching watched message {message_id} in channel {channel_id}: {e}. Removing.")
             channels_to_remove.append(channel_id)
 
-    # Clean up any channels that couldn't be fetched
     for ch_id in channels_to_remove:
         if ch_id in watched_schedules:
             del watched_schedules[ch_id]
         if ch_id in last_warhorn_sessions_data:
             del last_warhorn_sessions_data[ch_id]
-    save_watched_schedules() # Save the cleaned list
-    save_last_warhorn_sessions_data() # Save cleaned data
+    save_watched_schedules()
+    save_last_warhorn_sessions_data()
     
-    update_warhorn_schedule.start() # Start the scheduled task
+    update_warhorn_schedule.start()
 
 
 # --- get_warhorn_embed helper function ---
-def get_warhorn_embed_and_data(full: bool): # Renamed to return both embed and raw data
+def get_warhorn_embed_and_data(full: bool):
     desc_text = """# Schedule
 The following games are upcoming on this server, click on a link to schedule a seat.
 
 """
     pandodnd_slug = "pandodnd"
     try:
+        # Pass the current UTC time for startsAfter filter, directly to the client
+        current_utc_time = datetime.now(timezone.utc).isoformat(timespec='seconds') + 'Z' 
+        # The warhorn_api.py's get_event_sessions already handles this with 'startsAfter'
         result = warhorn_client.get_event_sessions(pandodnd_slug)
-        print(f"Warhorn API response: {json.dumps(result, indent=2)}") # Debug print: UNCOMMENTED THIS LINE
+        print(f"Warhorn API response: {json.dumps(result, indent=2)}")
 
         if "data" not in result or "eventSessions" not in result["data"] or "nodes" not in result["data"]["eventSessions"]:
             print("Unexpected Warhorn API response structure or no data.")
             return discord.Embed(title="Schedule Error", description="Could not retrieve schedule from Warhorn. Please try again later.", color=discord.Color.red()), []
 
-        sessions_data = sorted( # Store this raw data for comparison
+        # The API already filters for startsAfter, so we just sort the received nodes
+        sessions_data = sorted(
             result["data"]["eventSessions"]["nodes"],
-            key=lambda x: datetime.fromisoformat(x["startsAt"].replace("Z", "+00:00")) # Ensure timezone awareness for sorting
+            key=lambda x: datetime.fromisoformat(x["startsAt"].replace("Z", "+00:00"))
         )
 
         if not sessions_data:
@@ -292,7 +214,7 @@ The following games are upcoming on this server, click on a link to schedule a s
 
         for session in sessions_data:
             session_name = session["name"]
-            session_id = session["id"].replace("EventSession-", "") # Remove prefix for URL
+            session_id = session["id"].replace("EventSession-", "")
             session_start_str = session["startsAt"]
             session_location = session["location"]
             max_players = session["maxPlayers"]
@@ -302,13 +224,11 @@ The following games are upcoming on this server, click on a link to schedule a s
             gm_name = session["gmSignups"][0]["user"]["name"] if session["gmSignups"] else "No GM"
             players_signed_up = len(session["playerSignups"])
 
-            # Convert startsAt to a readable local time (e.g., Eastern Time)
-            from pytz import timezone # pytz needs to be installed: pip install pytz
             utc_dt = datetime.fromisoformat(session_start_str.replace("Z", "+00:00"))
-            eastern = timezone('America/New_York') # Assuming Romulus, Michigan is Eastern Time
+            eastern = timezone('America/New_York')
             local_dt = utc_dt.astimezone(eastern)
 
-            time_str = local_dt.strftime("%A, %B %d, %I:%M %p %Z") # e.g., Monday, July 22, 07:00 PM EDT
+            time_str = local_dt.strftime("%A, %B %d, %I:%M %p %Z")
 
             warhorn_url = f"https://warhorn.net/events/{pandodnd_slug}/schedule/sessions/{session_id}"
 
@@ -326,7 +246,7 @@ The following games are upcoming on this server, click on a link to schedule a s
             title="Warhorn Schedule for P4ND0",
             description=desc_text,
             color=discord.Color.blue(),
-            url=f"https://warhorn.net/events/{pandodnd_slug}/schedule" # Link the title to the main schedule
+            url=f"https://warhorn.net/events/{pandodnd_slug}/schedule"
         )
         embed.set_footer(text="Updates every 10 minutes or on channel activity.")
         return embed, sessions_data
@@ -351,7 +271,6 @@ async def character(ctx, character_url: typing.Optional[str] = None):
     user_characters = characters.setdefault(user_id, [])
 
     if character_url:
-        # Regex to extract the character ID from the URL
         match = re.search(r"characters/(\d+)", character_url)
         if not match:
             await ctx.send("Please provide a valid D&D Beyond character URL (e.g., `https://www.dndbeyond.com/characters/1234567`).")
@@ -361,14 +280,14 @@ async def character(ctx, character_url: typing.Optional[str] = None):
         json_api_url = f"https://character-service.dndbeyond.com/character/v5/character/{character_id}"
 
         try:
-            print(f"Fetching character data from: {json_api_url}") # Debug print
+            print(f"Fetching character data from: {json_api_url}")
             response = requests.get(json_api_url)
-            response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
+            response.raise_for_status()
             char_data = response.json()
 
             if not char_data or "data" not in char_data:
                 await ctx.send("Could not retrieve character data from D&D Beyond. The character might be private or the ID is incorrect.")
-                print(f"D&D Beyond API response missing 'data' key: {char_data}") # Debug print
+                print(f"D&D Beyond API response missing 'data' key: {char_data}")
                 return
 
             char_info = char_data["data"]
@@ -378,10 +297,9 @@ async def character(ctx, character_url: typing.Optional[str] = None):
             
             avatar_url = char_info.get("decorations", {}).get("avatarUrl")
 
-            print(f"Extracted Character Name: {character_name}") # Debug print
-            print(f"Extracted Avatar URL: {avatar_url}") # Debug print
+            print(f"Extracted Character Name: {character_name}")
+            print(f"Extracted Avatar URL: {avatar_url}")
 
-            # Check if character already exists for the user and update it
             found = False
             for i, char_entry in enumerate(user_characters):
                 if char_entry["url"] == character_url:
@@ -393,7 +311,6 @@ async def character(ctx, character_url: typing.Optional[str] = None):
 
             save_characters()
 
-            # Create the embed
             try:
                 embed = discord.Embed(
                     title=f"Character Added/Updated: {character_name}",
@@ -404,8 +321,8 @@ async def character(ctx, character_url: typing.Optional[str] = None):
                     embed.set_thumbnail(url=avatar_url)
                 embed.set_footer(text=f"Saved for {ctx.author.display_name}")
 
-                print(f"Attempting to send embed: {embed.to_dict()}") # Debug print: See the full embed content
-                await ctx.send(embed=embed, suppress_embeds=True) 
+                print(f"Attempting to send embed: {embed.to_dict()}")
+                await ctx.send(embed=embed, suppress_embeds=True)
                 print(f"User {ctx.author.id} added/updated character: {character_name} ({character_url})")
             except Exception as embed_e:
                 await ctx.send(f"An error occurred while preparing or sending the Discord embed: {embed_e}")
@@ -422,13 +339,12 @@ async def character(ctx, character_url: typing.Optional[str] = None):
             print(f"Unexpected error in !character command: {e}")
 
     else:
-        # List saved characters
         if not user_characters:
             await ctx.send("You have no D&D Beyond characters saved. Use `$character <D&D Beyond URL>` to add one.")
             return
 
         embed = discord.Embed(
-            title=f"{ctx.author.display_name}'s Saved D&D Beyond Characters", # More specific title
+            title=f"{ctx.author.display_name}'s Saved D&D Beyond Characters",
             color=discord.Color.purple()
         )
         description_parts = []
@@ -447,10 +363,9 @@ async def schedule(ctx, full: typing.Optional[bool] = False):
     """Pulls the most recent schedule of upcoming events from Warhorn displayed in local time.
     Pass 'True' to get full details of events (though current implementation always gives details).
     """
-    # Renamed variable to avoid confusion with the command parameter 'full'
-    embed_to_send, _ = get_warhorn_embed_and_data(full) # full parameter is not currently used by internal logic
+    embed_to_send, _ = get_warhorn_embed_and_data(full)
 
-    if embed_to_send.color == discord.Color.red(): # Check for error embed
+    if embed_to_send.color == discord.Color.red():
         await ctx.send(embed=embed_to_send)
         return
     await ctx.send(embed=embed_to_send)
@@ -472,13 +387,12 @@ async def quote(ctx):
 @bot.command()
 async def watch(ctx):
     """Watches this channel for Warhorn schedule updates, ensuring the schedule message is always the most recent."""
-    embed_to_send, sessions_data = get_warhorn_embed_and_data(False) # Get current schedule and raw data
+    embed_to_send, sessions_data = get_warhorn_embed_and_data(False)
 
-    if embed_to_send.color == discord.Color.red(): # Check for error embed
-        await ctx.send(embed=embed_to_send) # Send the error embed
+    if embed_to_send.color == discord.Color.red():
+        await ctx.send(embed=embed_to_send)
         return
 
-    # Delete existing watched message if any for this channel before posting a new one
     channel_id = ctx.channel.id
     old_message_object = watched_schedules.get(channel_id)
     
@@ -494,16 +408,13 @@ async def watch(ctx):
         except Exception as e:
             print(f"Error handling old message {old_message_object.id} in watched channel {ctx.channel.name}: {e}")
 
-    # Send the new message (this will put it at the bottom)
     message = await ctx.send(embed=embed_to_send)
     
-    # Store the channel ID and the message object
     watched_schedules[channel_id] = message
-    # Store the raw sessions data for comparison by the scheduled task
     last_warhorn_sessions_data[channel_id] = sessions_data 
 
-    save_watched_schedules() # Save the updated state to file
-    save_last_warhorn_sessions_data() # Save the initial sessions data
+    save_watched_schedules()
+    save_last_warhorn_sessions_data()
 
     print(f"Set to watch channel {ctx.channel.name} ({channel_id}) with message ID {message.id}.")
     await ctx.send(f"This channel is now being watched for Warhorn schedule updates. I will keep the schedule at the bottom of the channel.")
@@ -514,24 +425,23 @@ async def unwatch(ctx):
     """Stops watching this channel for Warhorn schedule updates and deletes the message."""
     channel_id = ctx.channel.id
     if channel_id in watched_schedules:
-        message_object = watched_schedules.pop(channel_id) # Remove from memory first
-        last_warhorn_sessions_data.pop(channel_id, None) # Remove its last data as well
+        message_object = watched_schedules.pop(channel_id)
+        last_warhorn_sessions_data.pop(channel_id, None)
 
         try:
-            if isinstance(message_object, discord.Message): # Try to delete the last posted message if it's a valid object
+            if isinstance(message_object, discord.Message):
                 await message_object.delete()
                 print(f"Deleted schedule message {message_object.id} in {ctx.channel.name} and unwatched.")
             else:
-                # If it's not a discord.Message object (e.g., just IDs from load), it can't be deleted directly
                 print(f"Unwatched channel {ctx.channel.name} but no message object to delete (was likely from initial load).")
             
             await ctx.send(f"This channel is no longer being watched for Warhorn schedule updates.")
-            save_watched_schedules() # Save changes to file
+            save_watched_schedules()
             save_last_warhorn_sessions_data()
         except discord.NotFound:
             print(f"Message not found when trying to delete for unwatch in {ctx.channel.name} ({channel_id}). Already gone?")
             await ctx.send(f"This channel is no longer being watched, but I couldn't find the message to delete (it might have been deleted manually).")
-            save_watched_schedules() # Still save to unwatch it
+            save_watched_schedules()
             save_last_warhorn_sessions_data()
         except discord.Forbidden:
             print(f"Bot lacks permissions to delete message in {ctx.channel.name} ({channel_id}).")
@@ -549,14 +459,14 @@ async def unwatch(ctx):
 async def roll(ctx, dice: str):
     """Rolls a dice in NdN format."""
     try:
-        rolls, limit = map(int, dice.lower().split('d')) # .lower() to handle 'D'
+        rolls, limit = map(int, dice.lower().split('d'))
         if rolls <= 0 or limit <= 0:
             await ctx.send('Number of rolls and dice faces must be positive!')
             return
-        if rolls > 1000: # Prevent spam/abuse
+        if rolls > 1000:
             await ctx.send('Please do not roll more than 1000 dice at once.')
             return
-        if limit > 1000000: # Prevent extremely large dice
+        if limit > 1000000:
             await ctx.send('Dice faces must be 1,000,000 or less.')
             return
     except ValueError:
@@ -566,8 +476,8 @@ async def roll(ctx, dice: str):
     results = [random.randint(1, limit) for _ in range(rolls)]
     result_str = ', '.join(map(str, results))
 
-    if len(result_str) > 1000: # Keep it within reasonable limits for a single field
-        result_str = result_str[:1000] + "..." # Truncate if too long
+    if len(result_str) > 1000:
+        result_str = result_str[:1000] + "..."
 
     embed = discord.Embed(title="Dice Roll", description=f"{rolls}d{limit}", color=discord.Color.blue())
     embed.add_field(name="Results", value=result_str, inline=False)
@@ -579,40 +489,36 @@ async def roll(ctx, dice: str):
 
 
 # --- Scheduled Task to Update Warhorn Schedule ---
-@tasks.loop(minutes=10) # Check for updates every 10 minutes
+@tasks.loop(minutes=10)
 async def update_warhorn_schedule():
-    # Only run this if the bot is ready and there are channels being watched
     if not bot.is_ready() or not watched_schedules:
         print("Scheduled update skipped: Bot not ready or no channels watched.")
         return
 
     print("Running scheduled Warhorn schedule update check...")
     
-    new_embed, new_sessions_data = get_warhorn_embed_and_data(False) # Get the latest schedule and its raw data
+    new_embed, new_sessions_data = get_warhorn_embed_and_data(False)
 
-    if new_embed.color == discord.Color.red(): # Check if there was an error fetching data
+    if new_embed.color == discord.Color.red():
         print("Scheduled update: Error fetching new Warhorn data. Skipping update for all channels.")
-        return # Don't try to update messages with error data
+        return
 
-    # Compare the new data with the stored last_sessions_data
     new_sessions_json = json.dumps(new_sessions_data, sort_keys=True)
 
     channels_to_remove = []
-    # Iterate over a copy of the dictionary to allow deletion during iteration
     for channel_id, message_object in list(watched_schedules.items()):
-        if not isinstance(message_object, discord.Message): # If it's not a message object yet, skip
+        if not isinstance(message_object, discord.Message):
             print(f"Scheduled update: Message object for channel {channel_id} not yet fetched. Skipping.")
-            continue # Skip if the message object hasn't been fetched by on_ready yet
+            continue
 
-        last_sessions_json = json.dumps(last_warhorn_sessions_data.get(channel_id, []), sort_keys=True) # Default to empty list if no data
+        last_sessions_json = json.dumps(last_warhorn_sessions_data.get(channel_id, []), sort_keys=True)
 
         if new_sessions_json != last_sessions_json:
             print(f"Warhorn schedule content changed for channel {message_object.channel.name}. Editing message...")
             try:
-                # Edit the existing message object
                 await message_object.edit(embed=new_embed)
-                last_warhorn_sessions_data[channel_id] = new_sessions_data # Update stored data
-                save_last_warhorn_sessions_data() # Persist the new data
+                last_warhorn_sessions_data[channel_id] = new_sessions_data
+                save_last_warhorn_sessions_data()
                 print(f"Edited schedule message {message_object.id} in {message_object.channel.name}.")
             except discord.NotFound:
                 print(f"Scheduled update: Message {message_object.id} not found in channel {message_object.channel.name}. It might have been deleted manually or by on_message. Removing from watched_schedules.")
@@ -625,21 +531,20 @@ async def update_warhorn_schedule():
         else:
             print(f"Warhorn schedule for channel {message_object.channel.name} is unchanged (content-wise).")
 
-    # Clean up any channels that caused errors
     for ch_id in channels_to_remove:
         if ch_id in watched_schedules:
             del watched_schedules[ch_id]
         if ch_id in last_warhorn_sessions_data:
             del last_warhorn_sessions_data[ch_id]
-    save_watched_schedules() # Save the cleaned list
-    save_last_warhorn_sessions_data() # Save cleaned data
+    save_watched_schedules()
+    save_last_warhorn_sessions_data()
 
 
 @update_warhorn_schedule.before_loop
 async def before_update_warhorn_schedule():
-    await bot.wait_until_ready() # Wait until the bot is connected and ready
+    await bot.wait_until_ready()
     print("Warhorn schedule update loop ready to start.")
-    await asyncio.sleep(5) # Give Discord's cache a moment to populate
+    await asyncio.sleep(5)
     print("Finished initial delay for cache.")
 
 
