@@ -540,7 +540,13 @@ async def update_warhorn_schedule():
         print("Scheduled update: Error fetching new Warhorn data. Skipping update for all channels.")
         return
 
-    new_sessions_json = json.dumps(new_sessions_data, sort_keys=True)
+    # Canonicalized representations for comparisons
+    try:
+        new_sessions_json = json.dumps(new_sessions_data, sort_keys=True, default=str)
+        new_embed_sig = json.dumps(new_embed.to_dict(), sort_keys=True, default=str)
+    except Exception as e:
+        print(f"Error serializing new embed/sessions for comparison: {e}")
+        return
 
     channels_to_remove = []
     for channel_id, message_object in list(watched_schedules.items()):
@@ -548,25 +554,76 @@ async def update_warhorn_schedule():
             print(f"Scheduled update: Message object for channel {channel_id} not yet fetched. Skipping.")
             continue
 
-        last_sessions_json = json.dumps(last_warhorn_sessions_data.get(channel_id, []), sort_keys=True)
+        try:
+            channel = message_object.channel
 
-        if new_sessions_json != last_sessions_json:
-            print(f"Warhorn schedule content changed for channel {message_object.channel.name}. Editing message...")
+            # 1) Ensure the schedule message stays at the bottom:
             try:
-                await message_object.edit(embed=new_embed)
-                last_warhorn_sessions_data[channel_id] = new_sessions_data
-                save_last_warhorn_sessions_data()
-                print(f"Edited schedule message {message_object.id} in {message_object.channel.name}.")
-            except discord.NotFound:
-                print(f"Scheduled update: Message {message_object.id} not found in channel {message_object.channel.name}. It might have been deleted manually or by on_message. Removing from watched_schedules.")
-                channels_to_remove.append(channel_id)
-            except discord.Forbidden:
-                print(f"Scheduled update: Bot lacks permissions to edit message {message_object.id} in channel {message_object.channel.name}. Removing from watched_schedules.")
-                channels_to_remove.append(channel_id)
+                last_message = None
+                async for m in channel.history(limit=1):
+                    last_message = m
+                if last_message and last_message.id != message_object.id:
+                    print(f"Schedule is not the last message in #{channel.name}. Reposting at the bottom...")
+                    try:
+                        await message_object.delete()
+                    except discord.NotFound:
+                        print(f"Old schedule message {message_object.id} already deleted in #{channel.name}.")
+                    except discord.Forbidden:
+                        print(f"Forbidden deleting old schedule message {message_object.id} in #{channel.name}.")
+
+                    # Post a fresh message at the bottom
+                    new_msg = await channel.send(embed=new_embed)
+                    watched_schedules[channel_id] = new_msg
+                    last_warhorn_sessions_data[channel_id] = new_sessions_data
+                    save_watched_schedules()
+                    save_last_warhorn_sessions_data()
+                    print(f"Reposted schedule as message {new_msg.id} in #{channel.name}.")
+                    # Since we replaced the message, continue to next channel
+                    continue
             except Exception as e:
-                print(f"An error occurred during scheduled update for channel {message_object.channel.name}: {e}")
-        else:
-            print(f"Warhorn schedule for channel {message_object.channel.name} is unchanged (content-wise).")
+                print(f"Error while ensuring bottom message in #{channel.name}: {e}")
+
+            # 2) Check if content needs updating (even if sessions list is the same)
+            try:
+                last_sessions_json = json.dumps(
+                    last_warhorn_sessions_data.get(channel_id, []),
+                    sort_keys=True,
+                    default=str
+                )
+            except Exception as e:
+                print(f"Error serializing previous sessions for channel {channel_id}: {e}")
+                last_sessions_json = "[]"
+
+            current_embed_sig = None
+            try:
+                if message_object.embeds:
+                    current_embed_sig = json.dumps(message_object.embeds[0].to_dict(), sort_keys=True, default=str)
+            except Exception as e:
+                print(f"Error reading current embed for message {message_object.id} in #{channel.name}: {e}")
+
+            sessions_changed = (new_sessions_json != last_sessions_json)
+            embed_changed = (current_embed_sig != new_embed_sig)
+
+            if sessions_changed or embed_changed:
+                print(f"Updating schedule message in #{channel.name} (sessions_changed={sessions_changed}, embed_changed={embed_changed})...")
+                try:
+                    await message_object.edit(embed=new_embed)
+                    last_warhorn_sessions_data[channel_id] = new_sessions_data
+                    save_last_warhorn_sessions_data()
+                    print(f"Edited schedule message {message_object.id} in #{channel.name}.")
+                except discord.NotFound:
+                    print(f"Scheduled update: Message {message_object.id} not found in #{channel.name}. Removing from watch.")
+                    channels_to_remove.append(channel_id)
+                except discord.Forbidden:
+                    print(f"Scheduled update: Forbidden editing message {message_object.id} in #{channel.name}. Removing from watch.")
+                    channels_to_remove.append(channel_id)
+                except Exception as e:
+                    print(f"Error editing schedule message in #{channel.name}: {e}")
+            else:
+                print(f"Warhorn schedule for #{channel.name} is unchanged (sessions and embed).")
+
+        except Exception as e:
+            print(f"Unexpected error handling channel {channel_id}: {e}")
 
     for ch_id in channels_to_remove:
         if ch_id in watched_schedules:
