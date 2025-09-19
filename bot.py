@@ -548,6 +548,28 @@ async def update_warhorn_schedule():
         print(f"Error serializing new embed/sessions for comparison: {e}")
         return
 
+    # Helper to format a channel label safely (works for guild channels and DMs)
+    def _chan_label(ch) -> str:
+        try:
+            # Guild channels (TextChannel, Thread, etc.)
+            if isinstance(ch, discord.abc.GuildChannel):
+                return f"#{ch.name}"
+            # 1:1 DM
+            if isinstance(ch, discord.DMChannel):
+                user = getattr(ch, "recipient", None)
+                return f"DM with {user}" if user else "DM"
+            # Group DM
+            if isinstance(ch, discord.GroupChannel):
+                recips = getattr(ch, "recipients", None) or []
+                if recips:
+                    names = ", ".join(str(u) for u in recips[:3])
+                    more = f" +{len(recips)-3} more" if len(recips) > 3 else ""
+                    return f"Group DM ({names}{more})"
+                return "Group DM"
+        except Exception:
+            pass
+        return f"Channel {getattr(ch, 'id', 'unknown')}"
+
     channels_to_remove = []
     for channel_id, message_object in list(watched_schedules.items()):
         if not isinstance(message_object, discord.Message):
@@ -556,6 +578,7 @@ async def update_warhorn_schedule():
 
         try:
             channel = message_object.channel
+            chan_label = _chan_label(channel)
 
             # 1) Ensure the schedule message stays at the bottom:
             try:
@@ -563,13 +586,13 @@ async def update_warhorn_schedule():
                 async for m in channel.history(limit=1):
                     last_message = m
                 if last_message and last_message.id != message_object.id:
-                    print(f"Schedule is not the last message in #{channel.name}. Reposting at the bottom...")
+                    print(f"Schedule is not the last message in {chan_label}. Reposting at the bottom...")
                     try:
                         await message_object.delete()
                     except discord.NotFound:
-                        print(f"Old schedule message {message_object.id} already deleted in #{channel.name}.")
+                        print(f"Old schedule message {message_object.id} already deleted in {chan_label}.")
                     except discord.Forbidden:
-                        print(f"Forbidden deleting old schedule message {message_object.id} in #{channel.name}.")
+                        print(f"Forbidden deleting old schedule message {message_object.id} in {chan_label}.")
 
                     # Post a fresh message at the bottom
                     new_msg = await channel.send(embed=new_embed)
@@ -577,11 +600,11 @@ async def update_warhorn_schedule():
                     last_warhorn_sessions_data[channel_id] = new_sessions_data
                     save_watched_schedules()
                     save_last_warhorn_sessions_data()
-                    print(f"Reposted schedule as message {new_msg.id} in #{channel.name}.")
+                    print(f"Reposted schedule as message {new_msg.id} in {chan_label}.")
                     # Since we replaced the message, continue to next channel
                     continue
             except Exception as e:
-                print(f"Error while ensuring bottom message in #{channel.name}: {e}")
+                print(f"Error while ensuring bottom message in {chan_label}: {e}")
 
             # 2) Check if content needs updating (even if sessions list is the same)
             try:
@@ -599,28 +622,28 @@ async def update_warhorn_schedule():
                 if message_object.embeds:
                     current_embed_sig = json.dumps(message_object.embeds[0].to_dict(), sort_keys=True, default=str)
             except Exception as e:
-                print(f"Error reading current embed for message {message_object.id} in #{channel.name}: {e}")
+                print(f"Error reading current embed for message {message_object.id} in {chan_label}: {e}")
 
             sessions_changed = (new_sessions_json != last_sessions_json)
             embed_changed = (current_embed_sig != new_embed_sig)
 
             if sessions_changed or embed_changed:
-                print(f"Updating schedule message in #{channel.name} (sessions_changed={sessions_changed}, embed_changed={embed_changed})...")
+                print(f"Updating schedule message in {chan_label} (sessions_changed={sessions_changed}, embed_changed={embed_changed})...")
                 try:
                     await message_object.edit(embed=new_embed)
                     last_warhorn_sessions_data[channel_id] = new_sessions_data
                     save_last_warhorn_sessions_data()
-                    print(f"Edited schedule message {message_object.id} in #{channel.name}.")
+                    print(f"Edited schedule message {message_object.id} in {chan_label}.")
                 except discord.NotFound:
-                    print(f"Scheduled update: Message {message_object.id} not found in #{channel.name}. Removing from watch.")
+                    print(f"Scheduled update: Message {message_object.id} not found in {chan_label}. Removing from watch.")
                     channels_to_remove.append(channel_id)
                 except discord.Forbidden:
-                    print(f"Scheduled update: Forbidden editing message {message_object.id} in #{channel.name}. Removing from watch.")
+                    print(f"Scheduled update: Forbidden editing message {message_object.id} in {chan_label}. Removing from watch.")
                     channels_to_remove.append(channel_id)
                 except Exception as e:
-                    print(f"Error editing schedule message in #{channel.name}: {e}")
+                    print(f"Error editing schedule message in {chan_label}: {e}")
             else:
-                print(f"Warhorn schedule for #{channel.name} is unchanged (sessions and embed).")
+                print(f"Warhorn schedule for {chan_label} is unchanged (sessions and embed).")
 
         except Exception as e:
             print(f"Unexpected error handling channel {channel_id}: {e}")
