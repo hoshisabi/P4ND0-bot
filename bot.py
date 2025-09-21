@@ -256,12 +256,12 @@ async def get_warhorn_embed_and_data(full: bool):
             status_line = ""
                 
             if available_seats > 0:
-                status_line = f"  🟢 **Status:** {available_seats} slots available!"
+                status_line = f"* 🟢 **Status:** {available_seats} slots available!"
             elif waitlist_names: # Checks if the list 'waitlist_names' is not empty
-                status_line = f"  🟡 **Waitlist:** {', '.join(waitlist_names)}"
+                status_line = f"* 🟡 **Waitlist:** {', '.join(waitlist_names)}"
             else:
                 # This branch means available_seats is 0 AND waitlist_names is empty
-                status_line = "  🟡 **Status:** Full (empty waitlist) "
+                status_line = "* 🟡 **Status:** Full (empty waitlist) "
 
             # Convert to Unix timestamp for Discord's specialized time handling
             utc_dt = datetime.fromisoformat(session_start_str.replace("Z", "+00:00"))
@@ -271,9 +271,9 @@ async def get_warhorn_embed_and_data(full: bool):
             time_str = f"<t:{unix_timestamp}:F>"
 
             session_block = f"**[{session_name}]({warhorn_url})**  \n"
-            session_block += f"  📅 **When:** {time_str}  \n"
-            session_block += f"  🧙‍ **GM:** ️ {gm_name}  \n"
-            session_block += f"  👥 **Players:** {players_list_str}  \n"
+            session_block += f"* 📅 **When:** {time_str}  \n"
+            session_block += f"* 🧙‍ **GM:** ️ {gm_name}  \n"
+            session_block += f"* 👥 **Players:** {players_list_str}  \n"
             session_block += f"{status_line}  \n"
             
             session_block += "\n" 
