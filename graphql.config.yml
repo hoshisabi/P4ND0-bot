@@ -1,0 +1,7 @@
+schema:
+  - https://warhorn.net/graphql:
+      headers:
+        Authorization: Bearer ${WARHORN_APPLICATION_TOKEN}
+        Content-Type: application/json
+        Accept: application/json
+documents: '**/*.graphql'

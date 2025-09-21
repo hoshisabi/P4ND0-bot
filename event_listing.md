@@ -20,14 +20,12 @@ The following games are upcoming on this server, click on a link to schedule a s
 * **GM:** Daniel Chapman
 * **Players:** Trey, John R (Cylet#6352), Mark Dezura, Ttrpger, Ken Beckman, Gon Pri, Mike Mc 
 * **Waitlist:** Sleepy, Happy, Sneezy, Sniffly (Sniffly#1234)
-* ![thumbnail](https://www.dmsguild.com/images/8957/465724.png?width=300&height=200)
 
 **[SJ-DC-PAT-02 Snake-Eye Satellite](https://warhorn.net/events/pandodnd/schedule/sessions/2be0d101-c5c1-4d46-8f67-e46d8a457fe7)**
 * **When:** <t:1753743600:F>
 * **GM:** Daniel Chapman
 * **Players:** Trey, John R (Cylet#6352), Mark Dezura, Ttrpger, Ken Beckman, Gon Pri, Mike Mc
 * **Available:** 2 empty slots 
-* ![thumbnail](https://www.dmsguild.com/images/8957/434096.png?auto=format&fit=crop&crop=faces&ixlib=react-9.7.0&w=75&h=100&dpr=1&q=75)
 
 
 Updates every 10 minutes or on channel activity.
