@@ -10,8 +10,8 @@ WARHORN_APPLICATION_TOKEN = os.getenv("WARHORN_APPLICATION_TOKEN")
 WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
 
 # Final event_sessions_query including the 'uuid' field
-# language=graphql
 event_sessions_query = """
+#graphql
 query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
   eventSessions(events: $events, startsAfter: $startsAfter) {
     nodes {
