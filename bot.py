@@ -270,11 +270,11 @@ async def get_warhorn_embed_and_data(full: bool):
             # Format using Discord's timestamp markdown (F for Long Date/Time)
             time_str = f"<t:{unix_timestamp}:F>"
 
-            session_block = f"**[{session_name}]({warhorn_url})**\n"
-            session_block += f"📅 **When:** 📅 {time_str}\n"
-            session_block += f"🧙‍ **GM:** ️ {gm_name}\n"
-            session_block += f"👥 **Players:** 👥 {players_list_str}\n"
-            session_block += f"{status_line}\n" 
+            session_block = f"**[{session_name}]({warhorn_url})**  \n"
+            session_block += f"📅 **When:** 📅 {time_str}  \n"
+            session_block += f"🧙‍ **GM:** ️ {gm_name}  \n"
+            session_block += f"👥 **Players:** 👥 {players_list_str}  \n"
+            session_block += f"{status_line}  \n"
             
             session_block += "\n" 
 
