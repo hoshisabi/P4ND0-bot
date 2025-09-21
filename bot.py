@@ -256,12 +256,12 @@ async def get_warhorn_embed_and_data(full: bool):
             status_line = ""
                 
             if available_seats > 0:
-                status_line = f"* 🟢🟢**Status:** {available_seats} slots available! 🟢🟢"
+                status_line = f"* 🟢**Status:** {available_seats} slots available!"
             elif waitlist_names: # Checks if the list 'waitlist_names' is not empty
-                status_line = f"* 🟡🟡 **Waitlist:** {', '.join(waitlist_names)} 🟡🟡"
+                status_line = f"* 🟡 **Waitlist:** {', '.join(waitlist_names)}"
             else:
                 # This branch means available_seats is 0 AND waitlist_names is empty
-                status_line = "* 🟡🟡 **Status:** Full (empty waitlist) 🟡🟡"
+                status_line = "* 🟡 **Status:** Full (empty waitlist) "
 
             # Convert to Unix timestamp for Discord's specialized time handling
             utc_dt = datetime.fromisoformat(session_start_str.replace("Z", "+00:00"))
@@ -281,10 +281,8 @@ async def get_warhorn_embed_and_data(full: bool):
             desc_text += session_block # This line appends to desc_text
 
         desc_text += ("*Join the waitlist to be next in line if there is a cancellation.*\n"
-                      "*Players on the waitlist should feel free to join Discord to see if there are any last "
-                      "minute cancellations, there often are.*\n"
-                      "*If you miss a session you wanted to play, message me and I can schedule a repeat and add you"
-                      "to the initial players list.*\n")
+                      "*If you are on a waitlist, you may still get a spot due to cancellations.*\n"
+                      "*If you miss a session you want to play, let me know and I can create an addition session.*\n")
         embed = discord.Embed(
             title="Upcoming Warhorn Events",
             description=desc_text, # This is the final description
