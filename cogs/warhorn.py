@@ -7,6 +7,7 @@ import requests
 
 import discord
 from discord.ext import commands, tasks
+from discord import app_commands
 from utils.persistence import save_json_data, load_json_data
 from warhorn_api import WarhornClient
 
@@ -183,36 +184,44 @@ class Warhorn(commands.Cog):
             print(f"An unexpected error occurred in get_warhorn_embed_and_data: {e}")
             return discord.Embed(title="Schedule Error", description=f"An unexpected error occurred while fetching schedule: {e}", color=discord.Color.red()), []
 
-    @commands.command()
-    async def schedule(self, ctx, full: bool = False):
-        """Pulls the most recent schedule of upcoming events from Warhorn displayed in your local time."""
-        embed_to_send, _ = await self.get_warhorn_embed_and_data(full) 
-        await ctx.send(embed=embed_to_send)
+    @app_commands.command(name="schedule", description="Pulls the most recent schedule of upcoming events from Warhorn displayed in your local time.")
+    @app_commands.describe(view_type="Choose how much detail you want to see for the schedule.")
+    @app_commands.choices(view_type=[
+        app_commands.Choice(name="Summary View (Default)", value=0),
+        app_commands.Choice(name="Full Details (Includes Waitlist)", value=1)
+    ])
+    async def schedule(self, interaction: discord.Interaction, view_type: app_commands.Choice[int] = None):
+        await interaction.response.defer()
+        # Default to False (Summary View) if not provided
+        is_full = view_type.value == 1 if view_type else False
+        embed_to_send, _ = await self.get_warhorn_embed_and_data(is_full) 
+        await interaction.followup.send(embed=embed_to_send)
 
-    @commands.command()
-    async def watch(self, ctx):
-        """Watches this channel for Warhorn schedule updates, ensuring the schedule message is always the most recent."""
+    @app_commands.command(name="watch", description="Watches this channel for Warhorn updates, keeping the schedule at the bottom.")
+    async def watch(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         embed_to_send, sessions_data = await self.get_warhorn_embed_and_data(False)
 
         if embed_to_send.color == discord.Color.red():
-            await ctx.send(embed=embed_to_send)
+            await interaction.followup.send(embed=embed_to_send)
             return
 
-        channel_id = ctx.channel.id
+        channel_id = interaction.channel.id
         old_message_object = self.watched_schedules.get(channel_id)
         
         if old_message_object and isinstance(old_message_object, discord.Message):
             try:
                 await old_message_object.delete()
-                print(f"Deleted old schedule message {old_message_object.id} in channel {ctx.channel.name} before setting new watch.")
+                print(f"Deleted old schedule message {old_message_object.id} in channel {interaction.channel.name} before setting new watch.")
             except discord.NotFound:
                 pass
             except discord.Forbidden:
-                await ctx.send("Warning: I couldn't delete the previous schedule message. Please ensure I have 'Manage Messages' permission.")
+                await interaction.followup.send("Warning: I couldn't delete the previous schedule message. Please ensure I have 'Manage Messages' permission.")
             except Exception as e:
                 print(f"Error handling old message {old_message_object.id}: {e}")
 
-        message = await ctx.send(embed=embed_to_send)
+        # Send actual watched schedule to the channel text directly
+        message = await interaction.channel.send(embed=embed_to_send)
         
         self.watched_schedules[channel_id] = message
         self.last_warhorn_sessions_data[channel_id] = sessions_data 
@@ -220,13 +229,12 @@ class Warhorn(commands.Cog):
         self.save_watched_schedules()
         self.save_last_warhorn_sessions_data()
 
-        print(f"Set to watch channel {ctx.channel.name} ({channel_id}) with message ID {message.id}.")
-        await ctx.send(f"This channel is now being watched for Warhorn schedule updates. I will keep the schedule at the bottom of the channel.")
+        print(f"Set to watch channel {interaction.channel.name} ({channel_id}) with message ID {message.id}.")
+        await interaction.followup.send(f"This channel is now being watched for Warhorn schedule updates. I will keep the schedule at the bottom of the channel.", ephemeral=True)
 
-    @commands.command()
-    async def unwatch(self, ctx):
-        """Stops watching this channel for Warhorn schedule updates and deletes the message."""
-        channel_id = ctx.channel.id
+    @app_commands.command(name="unwatch", description="Stops watching this channel for Warhorn schedule updates.")
+    async def unwatch(self, interaction: discord.Interaction):
+        channel_id = interaction.channel.id
         if channel_id in self.watched_schedules:
             message_object = self.watched_schedules.pop(channel_id)
             self.last_warhorn_sessions_data.pop(channel_id, None)
@@ -235,21 +243,21 @@ class Warhorn(commands.Cog):
                 if isinstance(message_object, discord.Message):
                     await message_object.delete()
                 
-                await ctx.send(f"This channel is no longer being watched for Warhorn schedule updates.")
+                await interaction.response.send_message(f"This channel is no longer being watched for Warhorn schedule updates.", ephemeral=True)
                 self.save_watched_schedules()
                 self.save_last_warhorn_sessions_data()
             except discord.NotFound:
-                await ctx.send(f"This channel is no longer being watched, but I couldn't find the message to delete (it might have been deleted manually).")
+                await interaction.response.send_message(f"This channel is no longer being watched, but I couldn't find the message to delete (it might have been deleted manually).", ephemeral=True)
                 self.save_watched_schedules()
                 self.save_last_warhorn_sessions_data()
             except discord.Forbidden:
-                await ctx.send(f"This channel is no longer being watched, but I couldn't delete the message. Please delete it manually.")
+                await interaction.response.send_message(f"This channel is no longer being watched, but I couldn't delete the message. Please delete it manually.", ephemeral=True)
                 self.save_watched_schedules()
                 self.save_last_warhorn_sessions_data()
             except Exception as e:
-                await ctx.send(f"An error occurred while unwatching: {e}")
+                await interaction.response.send_message(f"An error occurred while unwatching: {e}", ephemeral=True)
         else:
-            await ctx.send("This channel is not currently being watched.")
+            await interaction.response.send_message("This channel is not currently being watched.", ephemeral=True)
 
     @tasks.loop(minutes=10)
     async def update_warhorn_schedule(self):

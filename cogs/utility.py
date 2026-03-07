@@ -3,39 +3,45 @@ import requests
 import json
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def quote(self, ctx):
-        """Generate a random quote (no parameters)"""
-        response = requests.get("https://zenquotes.io/api/random")
-        json_data = json.loads(response.text)
-        quote = f"{json_data[0]['q']}\n\t-*{json_data[0]['a']}*\n"
-        print(quote)
-        embed = discord.Embed(title="Quote", color=discord.Color.blue())
-        embed.description = quote
-        embed.set_author(name="zenquotes.io", url="https://zenquotes.io/")
-        await ctx.send(embed=embed)
+    @app_commands.command(name="quote", description="Generate a random quote")
+    async def quote(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        try:
+            response = requests.get("https://zenquotes.io/api/random", timeout=5)
+            response.raise_for_status()
+            json_data = response.json()
+            quote = f"{json_data[0]['q']}\n\t-*{json_data[0]['a']}*\n"
+            
+            embed = discord.Embed(title="Quote", color=discord.Color.blue())
+            embed.description = quote
+            embed.set_author(name="zenquotes.io", url="https://zenquotes.io/")
+            await interaction.followup.send(embed=embed)
+        except Exception as e:
+            print(f"Error fetching quote: {e}")
+            await interaction.followup.send("Sorry, I couldn't fetch a quote right now.")
 
-    @commands.command()
-    async def roll(self, ctx, dice: str):
-        """Rolls a dice in NdN format."""
+    @app_commands.command(name="roll", description="Rolls a dice in NdN format (e.g., 2d6)")
+    @app_commands.describe(dice="The dice to roll in NdN format (e.g., 1d20, 2d6, 4d8)")
+    async def roll(self, interaction: discord.Interaction, dice: str):
         try:
             rolls, limit = map(int, dice.lower().split('d'))
             if rolls <= 0 or limit <= 0:
-                await ctx.send('Number of rolls and dice faces must be positive!')
+                await interaction.response.send_message('Number of rolls and dice faces must be positive!', ephemeral=True)
                 return
             if rolls > 1000:
-                await ctx.send('Please do not roll more than 1000 dice at once.')
+                await interaction.response.send_message('Please do not roll more than 1000 dice at once.', ephemeral=True)
                 return
             if limit > 1000000:
-                await ctx.send('Dice faces must be 1,000,000 or less.')
+                await interaction.response.send_message('Dice faces must be 1,000,000 or less.', ephemeral=True)
                 return
         except ValueError:
-            await ctx.send('Format has to be in NdN (e.g., `2d6`)!')
+            await interaction.response.send_message('Format has to be in NdN (e.g., `2d6`)!', ephemeral=True)
             return
 
         results = [random.randint(1, limit) for _ in range(rolls)]
@@ -47,10 +53,9 @@ class Utility(commands.Cog):
         embed = discord.Embed(title="Dice Roll", description=f"{rolls}d{limit}", color=discord.Color.blue())
         embed.add_field(name="Results", value=result_str, inline=False)
         if rolls > 1:
-            embed.add_field(name="Total", value=sum(results), inline=False)
+            embed.add_field(name="Total", value=str(sum(results)), inline=False)
 
-        print(f"Dice result: {result_str}")
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Utility(bot))

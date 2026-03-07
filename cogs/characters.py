@@ -3,6 +3,7 @@ import requests
 import json
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 from utils.persistence import save_json_data, load_json_data
 
@@ -19,98 +20,119 @@ class Characters(commands.Cog):
         serializable_characters = {str(k): v for k, v in self.characters.items()}
         save_json_data(CHARACTERS_FILE, serializable_characters, f"Characters saved to {CHARACTERS_FILE}")
 
-    @commands.command()
-    async def character(self, ctx, character_url: str = None):
+    char_group = app_commands.Group(name="character", description="Manage your D&D Beyond characters")
+
+    @char_group.command(name="add", description="Add or update a D&D Beyond character to your profile")
+    @app_commands.describe(url="The full link to your D&D Beyond character sheet (e.g., https://www.dndbeyond.com/characters/12345)")
+    async def add(self, interaction: discord.Interaction, url: str):
         """
-        Manages D&D Beyond characters.
-        - Use $character <D&D Beyond URL> to add or update a character.
-        - Use $character to list your saved characters.
+        Adds a D&D Beyond character using its URL.
         """
-        user_id = ctx.author.id
+        await interaction.response.defer()
+        user_id = interaction.user.id
         user_characters = self.characters.setdefault(user_id, [])
 
-        if character_url:
-            match = re.search(r"characters/(\d+)", character_url)
-            if not match:
-                await ctx.send("Please provide a valid D&D Beyond character URL (e.g., `https://www.dndbeyond.com/characters/1234567`).")
+        # Extract just the ID block regardless of what comes after it (e.g. /builder)
+        match = re.search(r"characters/(\d+)", url)
+        if not match:
+            await interaction.followup.send("Please provide a valid D&D Beyond character URL or ID (e.g., `https://www.dndbeyond.com/characters/1234567`).")
+            return
+
+        character_id = match.group(1)
+        
+        # Clean the url so the saved embed link isn't /builder
+        clean_url = f"https://www.dndbeyond.com/characters/{character_id}"
+        json_api_url = f"https://character-service.dndbeyond.com/character/v5/character/{character_id}"
+
+        try:
+            print(f"Fetching character data from: {json_api_url}")
+            response = requests.get(json_api_url, timeout=10)
+            response.raise_for_status()
+            char_data = response.json()
+
+            if not char_data or "data" not in char_data:
+                await interaction.followup.send("Could not retrieve character data from D&D Beyond. The character might be private or the ID is incorrect.")
+                print(f"D&D Beyond API response missing 'data' key: {char_data}")
                 return
 
-            character_id = match.group(1)
-            json_api_url = f"https://character-service.dndbeyond.com/character/v5/character/{character_id}"
+            char_info = char_data["data"]
+            character_name = char_info.get("name", "Unknown Character")
+            if not character_name and char_info.get("username"):
+                    character_name = char_info.get("username")
+            
+            avatar_url = char_info.get("decorations", {}).get("avatarUrl")
+
+            found = False
+            for i, char_entry in enumerate(user_characters):
+                if char_entry["url"] == url:
+                    user_characters[i] = {"url": url, "name": character_name, "avatar_url": avatar_url}
+                    found = True
+                    break
+            if not found:
+                user_characters.append({"url": url, "name": character_name, "avatar_url": avatar_url})
+
+            self.save_characters()
 
             try:
-                print(f"Fetching character data from: {json_api_url}")
-                response = requests.get(json_api_url)
-                response.raise_for_status()
-                char_data = response.json()
+                embed = discord.Embed(
+                    title=f"Character Added/Updated: {character_name}",
+                    url=clean_url,
+                    color=discord.Color.gold()
+                )
+                if avatar_url:
+                    embed.set_thumbnail(url=avatar_url)
+                embed.set_footer(text=f"Saved for {interaction.user.display_name}")
 
-                if not char_data or "data" not in char_data:
-                    await ctx.send("Could not retrieve character data from D&D Beyond. The character might be private or the ID is incorrect.")
-                    print(f"D&D Beyond API response missing 'data' key: {char_data}")
-                    return
+                await interaction.followup.send(embed=embed)
+                print(f"User {interaction.user.id} added/updated character: {character_name} ({url})")
+            except Exception as embed_e:
+                await interaction.followup.send(f"An error occurred while preparing or sending the Discord embed: {embed_e}")
+                print(f"Error during embed creation/sending for character add: {embed_e}")
 
-                char_info = char_data["data"]
-                character_name = char_info.get("name", "Unknown Character")
-                if not character_name and char_info.get("username"):
-                     character_name = char_info.get("username")
-                
-                avatar_url = char_info.get("decorations", {}).get("avatarUrl")
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 403:
+                await interaction.followup.send(
+                    "❌ Could not retrieve character data! D&D Beyond returned a `403 Forbidden` error.\n\n"
+                    "**Fix:** The bot cannot read Private character sheets. Please go to your character's `Preferences` page on D&D Beyond and ensure **Character Privacy** is set to **Public**."
+                )
+            else:
+                await interaction.followup.send(f"Could not fetch character data due to an HTTP error: {e}")
+            print(f"HTTPError fetching D&D Beyond character: {e}")
+        except requests.exceptions.RequestException as e:
+            await interaction.followup.send(f"Could not fetch character data due to a network error: {e}")
+            print(f"Network error fetching D&D Beyond character: {e}")
+        except json.JSONDecodeError:
+            await interaction.followup.send("Could not parse D&D Beyond character data. The response was not valid JSON.")
+            print("JSONDecodeError for D&D Beyond character data.")
+        except Exception as e:
+            await interaction.followup.send(f"An unexpected error occurred while fetching character data: {e}")
+            print(f"Unexpected error in /character add command: {e}")
 
-                found = False
-                for i, char_entry in enumerate(user_characters):
-                    if char_entry["url"] == character_url:
-                        user_characters[i] = {"url": character_url, "name": character_name, "avatar_url": avatar_url}
-                        found = True
-                        break
-                if not found:
-                    user_characters.append({"url": character_url, "name": character_name, "avatar_url": avatar_url})
+    @char_group.command(name="list", description="List all your currently saved D&D Beyond characters")
+    async def list(self, interaction: discord.Interaction):
+        """
+        Lists the user's saved D&D Beyond characters.
+        """
+        user_id = interaction.user.id
+        user_characters = self.characters.get(user_id, [])
 
-                self.save_characters()
+        if not user_characters:
+            await interaction.response.send_message("You have no D&D Beyond characters saved. Use `/character add url:<URL>` to add one.", ephemeral=True)
+            return
 
-                try:
-                    embed = discord.Embed(
-                        title=f"Character Added/Updated: {character_name}",
-                        url=character_url,
-                        color=discord.Color.gold()
-                    )
-                    if avatar_url:
-                        embed.set_thumbnail(url=avatar_url)
-                    embed.set_footer(text=f"Saved for {ctx.author.display_name}")
+        embed = discord.Embed(
+            title=f"{interaction.user.display_name}'s Saved D&D Beyond Characters",
+            color=discord.Color.purple()
+        )
+        description_parts = []
+        for char_entry in user_characters:
+            char_name = char_entry.get("name", "Unknown Character")
+            char_url = char_entry.get("url", "#")
+            description_parts.append(f"• [{char_name}]({char_url})")
 
-                    await ctx.send(embed=embed, suppress_embeds=True)
-                    print(f"User {ctx.author.id} added/updated character: {character_name} ({character_url})")
-                except Exception as embed_e:
-                    await ctx.send(f"An error occurred while preparing or sending the Discord embed: {embed_e}")
-                    print(f"Error during embed creation/sending for !character: {embed_e}")
-
-            except requests.exceptions.RequestException as e:
-                await ctx.send(f"Could not fetch character data due to a network error: {e}")
-                print(f"Error fetching D&D Beyond character: {e}")
-            except json.JSONDecodeError:
-                await ctx.send("Could not parse D&D Beyond character data. The response was not valid JSON.")
-                print("JSONDecodeError for D&D Beyond character data.")
-            except Exception as e:
-                await ctx.send(f"An unexpected error occurred while fetching character data: {e}")
-                print(f"Unexpected error in !character command: {e}")
-
-        else:
-            if not user_characters:
-                await ctx.send("You have no D&D Beyond characters saved. Use `$character <D&D Beyond URL>` to add one.")
-                return
-
-            embed = discord.Embed(
-                title=f"{ctx.author.display_name}'s Saved D&D Beyond Characters",
-                color=discord.Color.purple()
-            )
-            description_parts = []
-            for char_entry in user_characters:
-                char_name = char_entry.get("name", "Unknown Character")
-                char_url = char_entry.get("url", "#")
-                description_parts.append(f"• [{char_name}]({char_url})")
-
-            embed.description = "\n".join(description_parts)
-            embed.set_footer(text="Click on a character name to view it on D&D Beyond.")
-            await ctx.send(embed=embed)
+        embed.description = "\n".join(description_parts)
+        embed.set_footer(text="Click on a character name to view it on D&D Beyond.")
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Characters(bot))

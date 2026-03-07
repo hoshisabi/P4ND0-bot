@@ -29,6 +29,13 @@ class P4ND0Bot(commands.Bot):
                 print(f"Loaded extension: {cog}")
             except Exception as e:
                 print(f"Failed to load extension {cog}: {e}")
+        
+        # Sync application slash commands globally
+        try:
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} slash commands")
+        except Exception as e:
+            print(f"Failed to sync slash commands: {e}")
 
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')

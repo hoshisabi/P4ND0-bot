@@ -16,7 +16,7 @@
   - [ ] **Auto-Scan D&D Beyond Links:**
     * Plan and implement a feature to monitor specific channels (like `#dan-text`) for shared D&D Beyond character links and automatically add them to the character list.
 ## Future/Refactoring Tasks
-- [ ] **Slash Commands** Use proper slash commands instead of looking for $watch and
+- [x] **Slash Commands** Use proper slash commands instead of looking for $watch and
                          similar dollar sign text to signify bot commands.
 - [ ] **DM Handling**    Bot handles DMs just fine, but some commands such as watch do
                          weird things when you run it from within a DM. We should better handle that, 
