@@ -1,1 +1,151 @@
-{}
+{
+    "688166777347506272": [
+        {
+            "id": "RXZlbnRTZXNzaW9uLTU4NjkxNA==",
+            "name": "PS-DC-PUB-02 Endless Glory",
+            "startsAt": "2026-03-11T16:00:00-07:00",
+            "location": "Online (details in event)",
+            "maxPlayers": 6,
+            "availablePlayerSeats": 0,
+            "uuid": "6d8ddf50-f3e4-4f49-af18-0867ebaf7357",
+            "gmSignups": [
+                {
+                    "user": {
+                        "name": "Daniel Chapman"
+                    }
+                }
+            ],
+            "playerSignups": [
+                {
+                    "user": {
+                        "name": "Ken Beckman"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Dean"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Patman"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Cylet#6352 (John R)"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Aviya B"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Mark Dezura"
+                    }
+                }
+            ],
+            "playerWaitlistEntries": [
+                {
+                    "user": {
+                        "name": "Mike Mc"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Trey"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Ttrpger"
+                    }
+                }
+            ],
+            "scenario": {
+                "name": "PS-DC-PUB-02 Endless Glory",
+                "gameSystem": {
+                    "name": "Dungeons & Dragons 5th Edition"
+                }
+            }
+        },
+        {
+            "id": "RXZlbnRTZXNzaW9uLTU4Njg2Nw==",
+            "name": "PS-DC-PUB-04 Market Value",
+            "startsAt": "2026-03-18T16:00:00-07:00",
+            "location": "Online (details in event)",
+            "maxPlayers": 6,
+            "availablePlayerSeats": 0,
+            "uuid": "48f054b3-c633-462a-9cdb-910e6d7789dd",
+            "gmSignups": [
+                {
+                    "user": {
+                        "name": "Daniel Chapman"
+                    }
+                }
+            ],
+            "playerSignups": [
+                {
+                    "user": {
+                        "name": "Cylet#6352 (John R)"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Mike Mc"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Ken Beckman"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Ttrpger"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Trey"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Mark Dezura"
+                    }
+                }
+            ],
+            "playerWaitlistEntries": [
+                {
+                    "user": {
+                        "name": "Aviya B"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Gon Prie"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "dscharfe"
+                    }
+                },
+                {
+                    "user": {
+                        "name": "Henry Champoux"
+                    }
+                }
+            ],
+            "scenario": {
+                "name": "PS-DC-PUB-04 Market Value",
+                "gameSystem": {
+                    "name": "Dungeons & Dragons 5th Edition"
+                }
+            }
+        }
+    ]
+}

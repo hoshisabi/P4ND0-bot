@@ -4,4 +4,8 @@ characters.bz
 .idea/
 gemini_workspace/
 Pipfile*
-__pycache__
+__pycache__/
+.venv/
+characters.json
+watched_schedules.json
+last_warhorn_sessions.json
