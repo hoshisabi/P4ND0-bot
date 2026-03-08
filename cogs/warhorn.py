@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 from utils.persistence import save_json_data, load_json_data
-from warhorn_api import WarhornClient
+from utils.warhorn_api import WarhornClient
 
 WATCHED_SCHEDULES_FILE = "watched_schedules.json"
 LAST_WARHORN_SESSIONS_FILE = "last_warhorn_sessions.json"
