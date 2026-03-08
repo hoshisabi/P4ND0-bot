@@ -14,6 +14,8 @@ certifi==2026.2.25
     # via requests
 charset-normalizer==3.4.5
     # via requests
+colorama==0.4.6 ; sys_platform == 'win32'
+    # via pytest
 discord-py==2.7.1
     # via p4nd0-bot
 frozenlist==1.8.0
@@ -24,16 +26,26 @@ idna==3.11
     # via
     #   requests
     #   yarl
+iniconfig==2.3.0
+    # via pytest
 multidict==6.7.1
     # via
     #   aiohttp
     #   yarl
 mysql-connector-python==9.6.0
     # via p4nd0-bot
+packaging==26.0
+    # via pytest
+pluggy==1.6.0
+    # via pytest
 propcache==0.4.1
     # via
     #   aiohttp
     #   yarl
+pygments==2.19.2
+    # via pytest
+pytest==9.0.2
+    # via p4nd0-bot
 python-dotenv==1.2.2
     # via p4nd0-bot
 requests==2.32.5

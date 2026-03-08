@@ -12,9 +12,15 @@ CHARACTERS_FILE = "characters.json"
 class Characters(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.characters = load_json_data(CHARACTERS_FILE, f"{CHARACTERS_FILE} not found. Starting with empty characters.")
+        # Use UTC timestamp for startup logs
+        timestamp = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        self.characters = load_json_data(
+            CHARACTERS_FILE, 
+            f"[{timestamp}] {CHARACTERS_FILE} not found. Starting with empty characters."
+        )
         if self.characters:
-            print(f"Characters loaded from {CHARACTERS_FILE}")
+            print(f"[{timestamp}] Characters loaded from {CHARACTERS_FILE}")
 
     def save_characters(self):
         serializable_characters = {str(k): v for k, v in self.characters.items()}

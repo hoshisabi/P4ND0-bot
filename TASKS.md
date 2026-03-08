@@ -43,9 +43,9 @@
     - [x] Split into `cogs/warhorn.py`, `cogs/characters.py`, `cogs/logging.py`, `utils/db_manager.py`, etc.
 - [ ] **Better DM (Private Message) Handling:** Improve how the bot responds to commands within DMs.
 - [ ] **Centralize Configuration:** Move all hardcoded strings and IDs to a dedicated `config.py` or the Database.
-- [ ] **Automated Testing:** Introduce `pytest` for core logic and API interactions.
+- [ ] **Automated Testing:** Expand `pytest` coverage for core logic and API interactions (Started: `tests/test_persistence.py`).
 - [ ] **UI/UX Polishing:**
-    - [ ] Improve startup logging (show channel names/timestamps instead of just IDs).
+    - [x] Improve startup logging (show channel names/timestamps instead of just IDs).
     - [ ] Provide more user-friendly error messages for API failures.
 
 ## Action Required (Dan)

@@ -17,13 +17,22 @@ LAST_WARHORN_SESSIONS_FILE = "last_warhorn_sessions.json"
 class Warhorn(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.watched_schedules = load_json_data(WATCHED_SCHEDULES_FILE, f"{WATCHED_SCHEDULES_FILE} not found. Starting with no watched channels.")
+        # Use UTC timestamp for startup logs
+        timestamp = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        self.watched_schedules = load_json_data(
+            WATCHED_SCHEDULES_FILE, 
+            f"[{timestamp}] {WATCHED_SCHEDULES_FILE} not found. Starting with no watched channels."
+        )
         if self.watched_schedules:
-            print(f"Watched schedules loaded from {WATCHED_SCHEDULES_FILE} (IDs only, messages will be fetched).")
+            print(f"[{timestamp}] Watched schedules loaded from {WATCHED_SCHEDULES_FILE} (IDs only, messages will be fetched).")
             
-        self.last_warhorn_sessions_data = load_json_data(LAST_WARHORN_SESSIONS_FILE, f"{LAST_WARHORN_SESSIONS_FILE} not found. Starting with no last sessions data.")
+        self.last_warhorn_sessions_data = load_json_data(
+            LAST_WARHORN_SESSIONS_FILE, 
+            f"[{timestamp}] {LAST_WARHORN_SESSIONS_FILE} not found. Starting with no last sessions data."
+        )
         if self.last_warhorn_sessions_data:
-            print(f"Last Warhorn sessions data loaded from {LAST_WARHORN_SESSIONS_FILE}")
+            print(f"[{timestamp}] Last Warhorn sessions data loaded from {LAST_WARHORN_SESSIONS_FILE}")
             
         WARHORN_APPLICATION_TOKEN = os.getenv("WARHORN_APPLICATION_TOKEN")
         WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
@@ -53,6 +62,17 @@ class Warhorn(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         channels_to_remove = []
+        current_time = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        def _get_channel_label(ch):
+            if isinstance(ch, discord.TextChannel):
+                return f"#{ch.name}"
+            elif isinstance(ch, discord.Thread):
+                return f"Thread '{ch.name}'"
+            elif isinstance(ch, discord.DMChannel):
+                return f"DM with {ch.recipient}"
+            return f"Channel {ch.id}"
+
         for channel_id, data_or_message in list(self.watched_schedules.items()): 
             if isinstance(data_or_message, discord.Message):
                 continue 
@@ -67,18 +87,19 @@ class Warhorn(commands.Cog):
                 if channel:
                     message = await channel.fetch_message(message_id)
                     self.watched_schedules[channel_id] = message
-                    print(f"Successfully fetched watched message {message_id} in channel {channel_id}.")
+                    chan_label = _get_channel_label(channel)
+                    print(f"[{current_time}] Successfully fetched watched message {message_id} in {chan_label} ({channel_id}).")
                 else:
-                    print(f"Channel {channel_id} not found for watched message {message_id}. Removing from watch list.")
+                    print(f"[{current_time}] Channel {channel_id} not found for watched message {message_id}. Removing from watch list.")
                     channels_to_remove.append(channel_id)
             except discord.NotFound:
-                print(f"Message {message_id} not found in channel {channel_id}. It might have been deleted. Removing from watch list.")
+                print(f"[{current_time}] Message {message_id} not found in channel {channel_id}. It might have been deleted. Removing from watch list.")
                 channels_to_remove.append(channel_id)
             except discord.Forbidden:
-                print(f"Bot does not have permission to access channel {channel_id} or message {message_id}. Removing from watch list.")
+                print(f"[{current_time}] Bot does not have permission to access channel {channel_id} or message {message_id}. Removing from watch list.")
                 channels_to_remove.append(channel_id)
             except Exception as e:
-                print(f"An error occurred while fetching watched message {message_id} in channel {channel_id}: {e}. Removing.")
+                print(f"[{current_time}] An error occurred while fetching watched message {message_id} in channel {channel_id}: {e}. Removing.")
                 channels_to_remove.append(channel_id)
 
         for ch_id in channels_to_remove:

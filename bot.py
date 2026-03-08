@@ -38,7 +38,8 @@ class P4ND0Bot(commands.Bot):
             print(f"Failed to sync slash commands: {e}")
 
     async def on_ready(self):
-        print(f'Logged in as {self.user} (ID: {self.user.id})')
+        current_time = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        print(f'[{current_time}] Logged in as {self.user} (ID: {self.user.id})')
         print('------')
 
 bot = P4ND0Bot()
