@@ -242,8 +242,16 @@ class Warhorn(commands.Cog):
                 print(f"Error handling old message {old_message_object.id}: {e}")
 
         # Send actual watched schedule to the channel text directly
-        message = await interaction.channel.send(embed=embed_to_send)
-        
+        try:
+            message = await interaction.channel.send(embed=embed_to_send)
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "I don't have permission to send messages in this channel. "
+                "Please ensure I have the **Send Messages** permission here.",
+                ephemeral=True
+            )
+            return
+
         self.watched_schedules[channel_id] = message
         self.last_warhorn_sessions_data[channel_id] = sessions_data 
 
