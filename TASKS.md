@@ -23,6 +23,45 @@
 
 ## Functional Enhancements
 
+### DM Schedule Notifications (`/notify` / `/unnotify`)
+User-centric opt-in to receive personal DM updates when the schedule changes. Distinct from `/watch` (which posts a live embed to a channel); this is about pushing a notification *to the user* when something is new or different.
+
+- [ ] **`/notify` command:** User opts in. Bot stores their Discord user ID in a new `notify_subscribers.json` (or DB table). Responds ephemerally confirming subscription.
+- [ ] **`/unnotify` command:** User opts out. Removes their ID from the subscriber list.
+- [ ] **Change detection:** In the existing `update_warhorn_schedule` loop, when session data changes, identify *what specifically changed* (new session added, session cancelled, seat opened, etc.) and compose a short summary message.
+- [ ] **DM delivery:** For each subscriber, open a DM (`user.create_dm()`) and send the summary. Handle `discord.Forbidden` gracefully (user has DMs disabled — remove or flag them).
+- [ ] **Status command:** `/notify status` shows the user whether they're currently subscribed.
+
+**Design notes:**
+- Store subscriber list as user IDs only (not channel IDs) — reconstruct DM channel at send time via `user.create_dm()`. This avoids the restart/cache issue that affected `/watch` in DMs.
+- Notification message should be a brief prose summary ("📅 Schedule updated: *Frozen Sick* was added for \<t:...:F\>"), not a full embed re-post.
+- Consider rate-limiting: if multiple sessions change in one heartbeat, batch into a single DM rather than multiple.
+
+---
+
+### Game Countdown Announcements
+Automatically post reminders to a designated server channel as a session's start time approaches.
+
+- [ ] **Announcement channel config:** Admin command (e.g. `/setannouncechannel`) to designate which channel receives countdown messages. Store in guild config (ties into DB migration task).
+- [ ] **Countdown schedule:** For each upcoming session, fire messages at the following thresholds before `startsAt`:
+    - Day-of (first heartbeat after midnight local/server time)
+    - 1 hour before
+    - 30 minutes before
+    - 10 minutes before
+    - At start time ("Game starting now!")
+- [ ] **Sent-announcements tracking:** Persist a record of which (session_uuid, threshold) pairs have already been announced, so restarts don't re-fire old announcements. Store in `announced_sessions.json` or DB.
+- [ ] **Multi-session handling:** If two sessions start the same day, send separate announcements for each.
+- [ ] **Cancellation handling:** If a session disappears from Warhorn between heartbeats, suppress any remaining announcements for it.
+
+**Design notes:**
+- The existing 10-minute loop is sufficient resolution for the 30/10-minute thresholds. Check: `now <= startsAt <= now + 10min` with the already-sent guard.
+- Day-of announcement can use a coarser check (date match) rather than a time window.
+- Threshold logic should be driven by a list of `(timedelta, label)` pairs so it's easy to add or remove thresholds later.
+
+---
+
+
+
 ### Character Import Feature
 - [ ] **Character Import Requests:**
     - [ ] Add an "Import Needed" option to `/character add`.
@@ -75,7 +114,7 @@ Distinct from wishlist: *wishlist* = "I want to play this someday"; *encore* = "
 
 - [x] **Refactor `bot.py` into Modules (Cogs):**
     - [x] Split into `cogs/warhorn.py`, `cogs/characters.py`, `cogs/logging.py`, `utils/db_manager.py`, etc.
-- [~] **Better DM (Private Message) Handling:** Fix applied for `/watch` in DMs (`AttributeError` on `channel.name`). Awaiting confirmation that schedule updates are being received in DMs.
+- [x] **Better DM (Private Message) Handling:** Fixed `AttributeError` on `channel.name` for DMChannel in `/watch`. Confirmed working.
 - [ ] **Centralize Configuration:** Move all hardcoded strings and IDs to a dedicated `config.py` or the Database.
 - [ ] **Automated Testing:** Expand `pytest` coverage for core logic and API interactions (Started: `tests/test_persistence.py`).
 - [ ] **UI/UX Polishing:**
