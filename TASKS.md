@@ -37,11 +37,45 @@
 - [ ] **Waitlist Logic Refinement:** Ensure waitlist data is fully integrated into the schedule display (currently partially implemented).
 - [ ] (LOW PRIORITY) **Multi-Slug Support:** Allow `$watch` (or `/watch`) to take a slug or URL to support multiple Warhorn events.
 
+## Adventure Wishlist & Encore
+
+### Wishlist Feature
+Allow players to request adventures they'd like to play in a future session.
+
+- [ ] **Catalog Lookup:** Locate and integrate the `al_adventure_catalog` sibling project (`../al_adventure_catalog` or similar — confirm exact path/structure).
+- [ ] **Adventure Linking:** Link each wishlist entry to the corresponding `.json` in the catalog.
+- [ ] **2-Hour Filter:** For now, only surface/permit 2-hour adventures.
+- [ ] **Ownership Flag:** Add a config option to indicate whether the user owns a given adventure.
+
+**Design questions:**
+- Exact path and structure of `al_adventure_catalog` — needs exploration before implementation.
+- How to reliably determine ownership (manual flag in catalog JSON? separate config file?).
+- UI: slash command with autocomplete from catalog, or interactive prompt?
+
+---
+
+### Encore Feature
+Allow players to request an adventure they missed (or know they'll miss) to be queued for the next time it runs.
+
+Distinct from wishlist: *wishlist* = "I want to play this someday"; *encore* = "I want to play this specific adventure the next time it's scheduled."
+
+- [ ] **Slash command interaction:** Ask the user whether they mean (a) "I'm going to miss an upcoming session" or (b) "I already missed a session" — resolve the timing ambiguity via prompt.
+- [ ] **Session history:** Store the last 2 past adventures (in addition to future ones) so players can reference a recent missed session (~2-week lookback window).
+- [ ] **Encore queue:** Surface encore requesters when the adventure is next scheduled.
+- [ ] **Audit session pruning:** Identify anywhere old sessions are currently dropped and adjust for the 2-session history requirement.
+
+**Design questions:**
+- Shared data model with wishlist (flag on same record) or a separate list?
+- Should encore requests get higher scheduling priority than wishlist entries?
+- Does the system need to distinguish preemptive vs. retrospective, or is "next occurrence" sufficient?
+
+---
+
 ## Future / Refactoring Tasks
 
 - [x] **Refactor `bot.py` into Modules (Cogs):**
     - [x] Split into `cogs/warhorn.py`, `cogs/characters.py`, `cogs/logging.py`, `utils/db_manager.py`, etc.
-- [ ] **Better DM (Private Message) Handling:** Improve how the bot responds to commands within DMs.
+- [~] **Better DM (Private Message) Handling:** Fix applied for `/watch` in DMs (`AttributeError` on `channel.name`). Awaiting confirmation that schedule updates are being received in DMs.
 - [ ] **Centralize Configuration:** Move all hardcoded strings and IDs to a dedicated `config.py` or the Database.
 - [ ] **Automated Testing:** Expand `pytest` coverage for core logic and API interactions (Started: `tests/test_persistence.py`).
 - [ ] **UI/UX Polishing:**
@@ -50,3 +84,4 @@
 
 ## Action Required (Dan)
 - [x] **Recreate Python Environment with UV:** Delete `.venv` and run `uv sync` to fix broken executable paths.
+- [ ] **Verify DM Watch Updates:** Run `/watch` in a DM with the bot, send a message in that DM to push the schedule off the bottom, wait up to 10 minutes, and confirm the bot reposts the schedule. Report back pass/fail.
