@@ -59,21 +59,31 @@ class Warhorn(commands.Cog):
         serializable_data = {str(k): v for k, v in self.last_warhorn_sessions_data.items()}
         save_json_data(LAST_WARHORN_SESSIONS_FILE, serializable_data, f"Last Warhorn sessions data saved to {LAST_WARHORN_SESSIONS_FILE}")
 
+    @staticmethod
+    def _chan_label(ch) -> str:
+        try:
+            if isinstance(ch, discord.TextChannel) or isinstance(ch, discord.Thread):
+                return f"#{ch.name}"
+            if isinstance(ch, discord.DMChannel):
+                user = getattr(ch, "recipient", None)
+                return f"DM with {user}" if user else "DM"
+            if isinstance(ch, discord.GroupChannel):
+                recips = getattr(ch, "recipients", None) or []
+                if recips:
+                    names = ", ".join(str(u) for u in recips[:3])
+                    more = f" +{len(recips)-3} more" if len(recips) > 3 else ""
+                    return f"Group DM ({names}{more})"
+                return "Group DM"
+        except Exception:
+            pass
+        return f"Channel {getattr(ch, 'id', 'unknown')}"
+
     @commands.Cog.listener()
     async def on_ready(self):
         channels_to_remove = []
         current_time = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-        def _get_channel_label(ch):
-            if isinstance(ch, discord.TextChannel):
-                return f"#{ch.name}"
-            elif isinstance(ch, discord.Thread):
-                return f"Thread '{ch.name}'"
-            elif isinstance(ch, discord.DMChannel):
-                return f"DM with {ch.recipient}"
-            return f"Channel {ch.id}"
-
-        for channel_id, data_or_message in list(self.watched_schedules.items()): 
+        for channel_id, data_or_message in list(self.watched_schedules.items()):
             if isinstance(data_or_message, discord.Message):
                 continue 
 
@@ -87,7 +97,7 @@ class Warhorn(commands.Cog):
                 if channel:
                     message = await channel.fetch_message(message_id)
                     self.watched_schedules[channel_id] = message
-                    chan_label = _get_channel_label(channel)
+                    chan_label = self._chan_label(channel)
                     print(f"[{current_time}] Successfully fetched watched message {message_id} in {chan_label} ({channel_id}).")
                 else:
                     print(f"[{current_time}] Channel {channel_id} not found for watched message {message_id}. Removing from watch list.")
@@ -233,7 +243,7 @@ class Warhorn(commands.Cog):
         if old_message_object and isinstance(old_message_object, discord.Message):
             try:
                 await old_message_object.delete()
-                print(f"Deleted old schedule message {old_message_object.id} in channel {interaction.channel.name} before setting new watch.")
+                print(f"Deleted old schedule message {old_message_object.id} in {self._chan_label(interaction.channel)} before setting new watch.")
             except discord.NotFound:
                 pass
             except discord.Forbidden:
@@ -258,7 +268,7 @@ class Warhorn(commands.Cog):
         self.save_watched_schedules()
         self.save_last_warhorn_sessions_data()
 
-        print(f"Set to watch channel {interaction.channel.name} ({channel_id}) with message ID {message.id}.")
+        print(f"Set to watch {self._chan_label(interaction.channel)} ({channel_id}) with message ID {message.id}.")
         await interaction.followup.send(f"This channel is now being watched for Warhorn schedule updates. I will keep the schedule at the bottom of the channel.", ephemeral=True)
 
     @app_commands.command(name="unwatch", description="Stops watching this channel for Warhorn schedule updates.")
@@ -308,24 +318,6 @@ class Warhorn(commands.Cog):
             print(f"Error serializing new embed/sessions for comparison: {e}")
             return
 
-        def _chan_label(ch) -> str:
-            try:
-                if isinstance(ch, discord.abc.GuildChannel):
-                    return f"#{ch.name}"
-                if isinstance(ch, discord.DMChannel):
-                    user = getattr(ch, "recipient", None)
-                    return f"DM with {user}" if user else "DM"
-                if isinstance(ch, discord.GroupChannel):
-                    recips = getattr(ch, "recipients", None) or []
-                    if recips:
-                        names = ", ".join(str(u) for u in recips[:3])
-                        more = f" +{len(recips)-3} more" if len(recips) > 3 else ""
-                        return f"Group DM ({names}{more})"
-                    return "Group DM"
-            except Exception:
-                pass
-            return f"Channel {getattr(ch, 'id', 'unknown')}"
-
         channels_to_remove = []
         for channel_id, message_object in list(self.watched_schedules.items()):
             if not isinstance(message_object, discord.Message):
@@ -333,7 +325,7 @@ class Warhorn(commands.Cog):
 
             try:
                 channel = message_object.channel
-                chan_label = _chan_label(channel)
+                chan_label = self._chan_label(channel)
 
                 try:
                     last_message = None
