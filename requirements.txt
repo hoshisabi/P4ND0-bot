@@ -2,7 +2,7 @@
 #    uv export --no-hashes --format requirements-txt
 aiohappyeyeballs==2.6.1
     # via aiohttp
-aiohttp==3.13.3
+aiohttp==3.13.4
     # via discord-py
 aiosignal==1.4.0
     # via aiohttp
@@ -44,11 +44,11 @@ propcache==0.4.1
     #   yarl
 pygments==2.19.2
     # via pytest
-pytest==9.0.2
+pytest==9.0.3
     # via p4nd0-bot
 python-dotenv==1.2.2
     # via p4nd0-bot
-requests==2.32.5
+requests==2.33.0
     # via p4nd0-bot
 typing-extensions==4.15.0 ; python_full_version < '3.13'
     # via aiosignal
