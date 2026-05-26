@@ -52,7 +52,7 @@ requests==2.33.0
     # via p4nd0-bot
 typing-extensions==4.15.0 ; python_full_version < '3.13'
     # via aiosignal
-urllib3==2.6.3
+urllib3==2.7.0
     # via requests
 yarl==1.23.0
     # via aiohttp
