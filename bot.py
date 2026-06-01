@@ -22,7 +22,7 @@ class P4ND0Bot(commands.Bot):
 
     async def setup_hook(self):
         # Load cogs
-        cogs = ['cogs.utility', 'cogs.characters', 'cogs.warhorn']
+        cogs = ['cogs.utility', 'cogs.characters', 'cogs.warhorn', 'cogs.rss']
         for cog in cogs:
             try:
                 await self.load_extension(cog)

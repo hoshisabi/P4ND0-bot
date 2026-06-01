@@ -9,3 +9,4 @@ __pycache__/
 characters.json
 watched_schedules.json
 last_warhorn_sessions.json
+rss_seen.json

@@ -1,0 +1,22 @@
+[
+  {
+    "url": "https://www.legendsofgreyhawk.com/feed/",
+    "channel_id": 1508893010950230016,
+    "name": "Legends of Greyhawk"
+  },
+  {
+    "url": "https://www.dmsguild.com/rss.php?filters=45470_0_0_0_0_0_0_0_0&src=fid45470&affiliate_id=171040",
+    "channel_id": 806276313416466452,
+    "name": "DMsGuild - Adventurers League"
+  },
+  {
+    "url": "https://warhorn.net/events/pandodnd/schedule/Ya7RynA9U_XsaE_Ve6Ht.atom",
+    "channel_id": 688166777347506272,
+    "name": "P4ND0 Warhorn Schedule"
+  },
+  {
+    "url": "https://www.dndbeyond.com/posts.rss",
+    "channel_id": 1016242877107535892,
+    "name": "D&D Beyond News"
+  }
+]
