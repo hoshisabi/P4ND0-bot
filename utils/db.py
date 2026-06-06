@@ -20,7 +20,7 @@ def init_schema():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS characters (
+            CREATE TABLE IF NOT EXISTS p4nd0_characters (
                 user_id BIGINT NOT NULL,
                 url VARCHAR(500) NOT NULL,
                 name VARCHAR(255) NOT NULL,
@@ -85,7 +85,7 @@ def _migrate_characters():
             for user_id_str, chars in data.items():
                 for char in chars:
                     cursor.execute(
-                        "INSERT IGNORE INTO characters (user_id, url, name, avatar_url) VALUES (%s, %s, %s, %s)",
+                        "INSERT IGNORE INTO p4nd0_characters (user_id, url, name, avatar_url) VALUES (%s, %s, %s, %s)",
                         (int(user_id_str), char["url"], char["name"], char.get("avatar_url")),
                     )
             conn.commit()
@@ -201,7 +201,7 @@ def load_all_characters() -> dict:
     conn = _connect()
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT user_id, url, name, avatar_url FROM characters")
+        cursor.execute("SELECT user_id, url, name, avatar_url FROM p4nd0_characters")
         rows = cursor.fetchall()
         cursor.close()
     finally:
@@ -221,7 +221,7 @@ def save_character(user_id: int, url: str, name: str, avatar_url):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO characters (user_id, url, name, avatar_url)
+            """INSERT INTO p4nd0_characters (user_id, url, name, avatar_url)
                VALUES (%s, %s, %s, %s)
                ON DUPLICATE KEY UPDATE name=VALUES(name), avatar_url=VALUES(avatar_url)""",
             (user_id, url, name, avatar_url),
