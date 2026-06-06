@@ -2,6 +2,7 @@ import os
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+from utils import db
 
 load_dotenv()
 
@@ -21,6 +22,13 @@ class P4ND0Bot(commands.Bot):
         super().__init__(command_prefix='$', description=description, intents=intents)
 
     async def setup_hook(self):
+        try:
+            db.init_schema()
+            db.migrate_from_json()
+            print("Database ready.")
+        except Exception as e:
+            print(f"Database initialization failed: {e}")
+
         # Load cogs
         cogs = ['cogs.utility', 'cogs.characters', 'cogs.warhorn', 'cogs.rss']
         for cog in cogs:

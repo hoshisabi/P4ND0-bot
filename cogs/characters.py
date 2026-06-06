@@ -5,26 +5,16 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-from utils.persistence import save_json_data, load_json_data
-
-CHARACTERS_FILE = "characters.json"
+from utils import db
 
 class Characters(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # Use UTC timestamp for startup logs
         timestamp = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-        self.characters = load_json_data(
-            CHARACTERS_FILE, 
-            f"[{timestamp}] {CHARACTERS_FILE} not found. Starting with empty characters."
-        )
+        self.characters = db.load_all_characters()
         if self.characters:
-            print(f"[{timestamp}] Characters loaded from {CHARACTERS_FILE}")
-
-    def save_characters(self):
-        serializable_characters = {str(k): v for k, v in self.characters.items()}
-        save_json_data(CHARACTERS_FILE, serializable_characters, f"Characters saved to {CHARACTERS_FILE}")
+            print(f"[{timestamp}] Characters loaded from database.")
 
     char_group = app_commands.Group(name="character", description="Manage your D&D Beyond characters")
 
@@ -77,7 +67,7 @@ class Characters(commands.Cog):
             if not found:
                 user_characters.append({"url": url, "name": character_name, "avatar_url": avatar_url})
 
-            self.save_characters()
+            db.save_character(user_id, url, character_name, avatar_url)
 
             try:
                 embed = discord.Embed(

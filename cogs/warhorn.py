@@ -8,31 +8,21 @@ import requests
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-from utils.persistence import save_json_data, load_json_data
+from utils import db
 from utils.warhorn_api import WarhornClient
-
-WATCHED_SCHEDULES_FILE = "watched_schedules.json"
-LAST_WARHORN_SESSIONS_FILE = "last_warhorn_sessions.json"
 
 class Warhorn(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # Use UTC timestamp for startup logs
         timestamp = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-        self.watched_schedules = load_json_data(
-            WATCHED_SCHEDULES_FILE, 
-            f"[{timestamp}] {WATCHED_SCHEDULES_FILE} not found. Starting with no watched channels."
-        )
+        self.watched_schedules = db.load_all_watched_schedules()
         if self.watched_schedules:
-            print(f"[{timestamp}] Watched schedules loaded from {WATCHED_SCHEDULES_FILE} (IDs only, messages will be fetched).")
-            
-        self.last_warhorn_sessions_data = load_json_data(
-            LAST_WARHORN_SESSIONS_FILE, 
-            f"[{timestamp}] {LAST_WARHORN_SESSIONS_FILE} not found. Starting with no last sessions data."
-        )
+            print(f"[{timestamp}] Watched schedules loaded from database (IDs only, messages will be fetched).")
+
+        self.last_warhorn_sessions_data = db.load_all_last_sessions()
         if self.last_warhorn_sessions_data:
-            print(f"[{timestamp}] Last Warhorn sessions data loaded from {LAST_WARHORN_SESSIONS_FILE}")
+            print(f"[{timestamp}] Last Warhorn sessions data loaded from database.")
             
         WARHORN_APPLICATION_TOKEN = os.getenv("WARHORN_APPLICATION_TOKEN")
         WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
@@ -42,22 +32,6 @@ class Warhorn(commands.Cog):
 
     def cog_unload(self):
         self.update_warhorn_schedule.cancel()
-
-    def save_watched_schedules(self):
-        serializable_watched_schedules = {}
-        for channel_id, msg_or_data in self.watched_schedules.items():
-            if isinstance(msg_or_data, discord.Message):
-                serializable_watched_schedules[str(channel_id)] = {
-                    "channel_id": msg_or_data.channel.id,
-                    "message_id": msg_or_data.id
-                }
-            elif isinstance(msg_or_data, dict):
-                 serializable_watched_schedules[str(channel_id)] = msg_or_data
-        save_json_data(WATCHED_SCHEDULES_FILE, serializable_watched_schedules, f"Watched schedules saved to {WATCHED_SCHEDULES_FILE}")
-
-    def save_last_warhorn_sessions_data(self):
-        serializable_data = {str(k): v for k, v in self.last_warhorn_sessions_data.items()}
-        save_json_data(LAST_WARHORN_SESSIONS_FILE, serializable_data, f"Last Warhorn sessions data saved to {LAST_WARHORN_SESSIONS_FILE}")
 
     @staticmethod
     def _chan_label(ch) -> str:
@@ -117,8 +91,8 @@ class Warhorn(commands.Cog):
                 del self.watched_schedules[ch_id]
             if ch_id in self.last_warhorn_sessions_data:
                 del self.last_warhorn_sessions_data[ch_id]
-        self.save_watched_schedules()
-        self.save_last_warhorn_sessions_data()
+            db.remove_watched_schedule(ch_id)
+            db.remove_last_sessions(ch_id)
 
     async def get_warhorn_embed_and_data(self, full: bool): 
         desc_text = "The following games are upcoming on this server, click on a link to schedule a seat.\n\n"
@@ -263,10 +237,10 @@ class Warhorn(commands.Cog):
             return
 
         self.watched_schedules[channel_id] = message
-        self.last_warhorn_sessions_data[channel_id] = sessions_data 
+        self.last_warhorn_sessions_data[channel_id] = sessions_data
 
-        self.save_watched_schedules()
-        self.save_last_warhorn_sessions_data()
+        db.save_watched_schedule(channel_id, message.id)
+        db.save_last_sessions(channel_id, sessions_data)
 
         print(f"Set to watch {self._chan_label(interaction.channel)} ({channel_id}) with message ID {message.id}.")
         await interaction.followup.send(f"This channel is now being watched for Warhorn schedule updates. I will keep the schedule at the bottom of the channel.", ephemeral=True)
@@ -277,22 +251,18 @@ class Warhorn(commands.Cog):
         if channel_id in self.watched_schedules:
             message_object = self.watched_schedules.pop(channel_id)
             self.last_warhorn_sessions_data.pop(channel_id, None)
+            db.remove_watched_schedule(channel_id)
+            db.remove_last_sessions(channel_id)
 
             try:
                 if isinstance(message_object, discord.Message):
                     await message_object.delete()
-                
-                await interaction.response.send_message(f"This channel is no longer being watched for Warhorn schedule updates.", ephemeral=True)
-                self.save_watched_schedules()
-                self.save_last_warhorn_sessions_data()
+
+                await interaction.response.send_message("This channel is no longer being watched for Warhorn schedule updates.", ephemeral=True)
             except discord.NotFound:
-                await interaction.response.send_message(f"This channel is no longer being watched, but I couldn't find the message to delete (it might have been deleted manually).", ephemeral=True)
-                self.save_watched_schedules()
-                self.save_last_warhorn_sessions_data()
+                await interaction.response.send_message("This channel is no longer being watched, but I couldn't find the message to delete (it might have been deleted manually).", ephemeral=True)
             except discord.Forbidden:
-                await interaction.response.send_message(f"This channel is no longer being watched, but I couldn't delete the message. Please delete it manually.", ephemeral=True)
-                self.save_watched_schedules()
-                self.save_last_warhorn_sessions_data()
+                await interaction.response.send_message("This channel is no longer being watched, but I couldn't delete the message. Please delete it manually.", ephemeral=True)
             except Exception as e:
                 await interaction.response.send_message(f"An error occurred while unwatching: {e}", ephemeral=True)
         else:
@@ -341,8 +311,8 @@ class Warhorn(commands.Cog):
                         new_msg = await channel.send(embed=new_embed)
                         self.watched_schedules[channel_id] = new_msg
                         self.last_warhorn_sessions_data[channel_id] = new_sessions_data
-                        self.save_watched_schedules()
-                        self.save_last_warhorn_sessions_data()
+                        db.save_watched_schedule(channel_id, new_msg.id)
+                        db.save_last_sessions(channel_id, new_sessions_data)
                         print(f"Reposted schedule as message {new_msg.id} in {chan_label}.")
                         continue
                 except Exception as e:
@@ -372,7 +342,7 @@ class Warhorn(commands.Cog):
                     try:
                         await message_object.edit(embed=new_embed)
                         self.last_warhorn_sessions_data[channel_id] = new_sessions_data
-                        self.save_last_warhorn_sessions_data()
+                        db.save_last_sessions(channel_id, new_sessions_data)
                         print(f"Edited schedule message {message_object.id} in {chan_label}.")
                     except discord.NotFound:
                         channels_to_remove.append(channel_id)
@@ -391,8 +361,8 @@ class Warhorn(commands.Cog):
                 del self.watched_schedules[ch_id]
             if ch_id in self.last_warhorn_sessions_data:
                 del self.last_warhorn_sessions_data[ch_id]
-        self.save_watched_schedules()
-        self.save_last_warhorn_sessions_data()
+            db.remove_watched_schedule(ch_id)
+            db.remove_last_sessions(ch_id)
 
     @update_warhorn_schedule.before_loop
     async def before_update_warhorn_schedule(self):
