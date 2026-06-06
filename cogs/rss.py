@@ -121,7 +121,7 @@ class RSSFeed(commands.Cog):
                 if posted_ids:
                     db.add_seen_ids(url, posted_ids)
                     db.prune_seen(url, MAX_SEEN_PER_FEED)
-                print(f"[RSS] Posted {len(new_entries)} new entry/entries for {feed_name}.")
+                print(f"[RSS] Posted {len(posted_ids)}/{len(new_entries)} new entry/entries for {feed_name}.")
 
             except Exception as e:
                 print(f"[RSS] Unexpected error for feed {url}: {e}")
