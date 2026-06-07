@@ -82,15 +82,20 @@ class Sessions(commands.Cog):
         )
         embed.add_field(name="When", value=f"<t:{unix_ts}:F>", inline=False)
 
+        unknown = []
         lines = []
         for p in player_data:
             if p["character_url"]:
                 lines.append(f"• {p['display_name']} → [{p['character_name']}]({p['character_url']})")
             else:
-                lines.append(f"• {p['display_name']} → *no character set*")
+                lines.append(f"• {p['display_name']} → Unknown")
+                unknown.append(p["display_name"])
         embed.add_field(name=f"Players ({len(player_data)})", value="\n".join(lines), inline=False)
 
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        if unknown:
+            embed.set_footer(text=f"No character set: {', '.join(unknown)} — use /character play to set yours!")
+
+        await interaction.followup.send(embed=embed)
 
     @gotime.error
     async def gotime_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
