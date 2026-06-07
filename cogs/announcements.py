@@ -67,24 +67,20 @@ class Announcements(commands.Cog):
             await self._check_session_reminders(now, channel, today_session)
 
     async def _check_noon(self, now, channel, today_session):
+        if not today_session:
+            return
+
         noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
         if not (noon <= now < noon + ANNOUNCEMENT_WINDOW):
             return
 
-        sentinel = today_session["id"] if today_session else f"no-session-{now.date()}"
+        sentinel = today_session["id"]
         if db.has_announcement_fired(sentinel, "day_of_noon"):
             return
 
-        if today_session:
-            embed = self._session_embed(today_session, title_prefix="Today's session")
-            embed.add_field(name="​", value=ABILITIES_TEXT, inline=False)
-            await channel.send(embed=embed)
-        else:
-            embed = discord.Embed(
-                description=ABILITIES_TEXT,
-                color=discord.Color.blurple(),
-            )
-            await channel.send(embed=embed)
+        embed = self._session_embed(today_session, title_prefix="Today's session")
+        embed.add_field(name="​", value=ABILITIES_TEXT, inline=False)
+        await channel.send(embed=embed)
 
         db.mark_announcement_fired(sentinel, "day_of_noon")
         print(f"[Announcements] Fired day_of_noon for {sentinel}")
