@@ -97,6 +97,11 @@ def init_schema():
                 PRIMARY KEY (warhorn_session_id, announcement_type)
             ) CHARACTER SET utf8mb4
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS schedule_subscribers (
+                discord_user_id BIGINT PRIMARY KEY
+            ) CHARACTER SET utf8mb4
+        """)
         conn.commit()
         cursor.close()
     finally:
@@ -532,6 +537,54 @@ def mark_announcement_fired(warhorn_session_id: str, announcement_type: str):
             "INSERT IGNORE INTO announcement_log (warhorn_session_id, announcement_type) VALUES (%s, %s)",
             (warhorn_session_id, announcement_type),
         )
+        conn.commit()
+        cursor.close()
+    finally:
+        conn.close()
+
+
+# --- Schedule Subscribers ---
+
+def get_all_subscribers() -> list:
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT discord_user_id FROM schedule_subscribers")
+        rows = cursor.fetchall()
+        cursor.close()
+        return [row[0] for row in rows]
+    finally:
+        conn.close()
+
+
+def is_subscribed(user_id: int) -> bool:
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM schedule_subscribers WHERE discord_user_id=%s", (user_id,))
+        result = cursor.fetchone() is not None
+        cursor.close()
+        return result
+    finally:
+        conn.close()
+
+
+def add_subscriber(user_id: int):
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT IGNORE INTO schedule_subscribers (discord_user_id) VALUES (%s)", (user_id,))
+        conn.commit()
+        cursor.close()
+    finally:
+        conn.close()
+
+
+def remove_subscriber(user_id: int):
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM schedule_subscribers WHERE discord_user_id=%s", (user_id,))
         conn.commit()
         cursor.close()
     finally:

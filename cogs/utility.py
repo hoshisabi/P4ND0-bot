@@ -28,6 +28,7 @@ class Utility(commands.Cog):
             name="Schedule",
             value=(
                 "`/schedule` — View upcoming Warhorn sessions (only you see it)\n"
+                "`/notify` — Toggle DM notifications when the schedule changes\n"
                 "`/watch` — Pin a live-updating schedule to this channel\n"
                 "`/unwatch` — Remove the pinned schedule from this channel"
             ),

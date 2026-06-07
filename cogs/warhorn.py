@@ -23,11 +23,13 @@ class Warhorn(commands.Cog):
         self.last_warhorn_sessions_data = db.load_all_last_sessions()
         if self.last_warhorn_sessions_data:
             print(f"[{timestamp}] Last Warhorn sessions data loaded from database.")
-            
+
+        self.global_sessions_json = None
+
         WARHORN_APPLICATION_TOKEN = os.getenv("WARHORN_APPLICATION_TOKEN")
         WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
         self.warhorn_client = WarhornClient(WARHORN_API_ENDPOINT, WARHORN_APPLICATION_TOKEN)
-        
+
         self.update_warhorn_schedule.start()
 
     def cog_unload(self):
@@ -288,6 +290,12 @@ class Warhorn(commands.Cog):
             print(f"Error serializing new embed/sessions for comparison: {e}")
             return
 
+        if self.global_sessions_json is None:
+            self.global_sessions_json = new_sessions_json
+        elif new_sessions_json != self.global_sessions_json:
+            self.global_sessions_json = new_sessions_json
+            await self._notify_subscribers(new_sessions_data)
+
         channels_to_remove = []
         for channel_id, message_object in list(self.watched_schedules.items()):
             if not isinstance(message_object, discord.Message):
@@ -370,6 +378,58 @@ class Warhorn(commands.Cog):
         print("Warhorn schedule update loop ready to start.")
         await asyncio.sleep(5)
         print("Finished initial delay for cache.")
+
+    async def _notify_subscribers(self, sessions_data: list):
+        subscriber_ids = db.get_all_subscribers()
+        if not subscriber_ids:
+            return
+
+        embed = discord.Embed(
+            title="P4ND0 Schedule Updated",
+            url=f"https://warhorn.net/events/pandodnd/schedule",
+            color=discord.Color.blue(),
+        )
+        for session in sessions_data[:6]:
+            starts_at = datetime.fromisoformat(session["startsAt"].replace("Z", "+00:00"))
+            unix_ts = int(starts_at.timestamp())
+            available = session.get("availablePlayerSeats", 0)
+            status = f"🟢 {available} open" if available > 0 else "🟡 Full"
+            embed.add_field(
+                name=session["name"],
+                value=f"<t:{unix_ts}:D> · {status}",
+                inline=False,
+            )
+        embed.set_footer(text="Run /notify in the server to unsubscribe from these updates.")
+
+        sent = 0
+        for user_id in subscriber_ids:
+            try:
+                user = await self.bot.fetch_user(user_id)
+                await user.send(embed=embed)
+                sent += 1
+            except discord.Forbidden:
+                print(f"[Warhorn] Could not DM subscriber {user_id} — DMs may be disabled.")
+            except Exception as e:
+                print(f"[Warhorn] Error notifying subscriber {user_id}: {e}")
+        print(f"[Warhorn] Notified {sent}/{len(subscriber_ids)} subscriber(s) of schedule change.")
+
+    @app_commands.command(name="notify", description="Toggle DM notifications when the Warhorn schedule changes.")
+    async def notify(self, interaction: discord.Interaction):
+        user_id = interaction.user.id
+        if db.is_subscribed(user_id):
+            db.remove_subscriber(user_id)
+            await interaction.response.send_message(
+                "You've been unsubscribed from schedule notifications. Run `/notify` again to re-subscribe.",
+                ephemeral=True,
+            )
+        else:
+            db.add_subscriber(user_id)
+            await interaction.response.send_message(
+                "✅ You'll now receive a DM whenever the Warhorn schedule changes. "
+                "Run `/notify` again to unsubscribe.",
+                ephemeral=True,
+            )
+
 
 async def setup(bot):
     await bot.add_cog(Warhorn(bot))
