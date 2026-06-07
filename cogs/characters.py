@@ -24,18 +24,18 @@ class Characters(commands.Cog):
         """
         Adds a D&D Beyond character using its URL.
         """
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         user_id = interaction.user.id
         user_characters = self.characters.setdefault(user_id, [])
 
         # Extract just the ID block regardless of what comes after it (e.g. /builder)
         match = re.search(r"characters/(\d+)", url)
         if not match:
-            await interaction.followup.send("Please provide a valid D&D Beyond character URL or ID (e.g., `https://www.dndbeyond.com/characters/1234567`).")
+            await interaction.followup.send("Please provide a valid D&D Beyond character URL or ID (e.g., `https://www.dndbeyond.com/characters/1234567`).", ephemeral=True)
             return
 
         character_id = match.group(1)
-        
+
         # Clean the url so the saved embed link isn't /builder
         clean_url = f"https://www.dndbeyond.com/characters/{character_id}"
         json_api_url = f"https://character-service.dndbeyond.com/character/v5/character/{character_id}"
@@ -47,15 +47,15 @@ class Characters(commands.Cog):
             char_data = response.json()
 
             if not char_data or "data" not in char_data:
-                await interaction.followup.send("Could not retrieve character data from D&D Beyond. The character might be private or the ID is incorrect.")
+                await interaction.followup.send("Could not retrieve character data from D&D Beyond. The character might be private or the ID is incorrect.", ephemeral=True)
                 print(f"D&D Beyond API response missing 'data' key: {char_data}")
                 return
 
             char_info = char_data["data"]
             character_name = char_info.get("name", "Unknown Character")
             if not character_name and char_info.get("username"):
-                    character_name = char_info.get("username")
-            
+                character_name = char_info.get("username")
+
             avatar_url = char_info.get("decorations", {}).get("avatarUrl")
 
             found = False
@@ -79,29 +79,30 @@ class Characters(commands.Cog):
                     embed.set_thumbnail(url=avatar_url)
                 embed.set_footer(text=f"Saved for {interaction.user.display_name}")
 
-                await interaction.followup.send(embed=embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 print(f"User {interaction.user.id} added/updated character: {character_name} ({url})")
             except Exception as embed_e:
-                await interaction.followup.send(f"An error occurred while preparing or sending the Discord embed: {embed_e}")
+                await interaction.followup.send(f"An error occurred while preparing or sending the Discord embed: {embed_e}", ephemeral=True)
                 print(f"Error during embed creation/sending for character add: {embed_e}")
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 403:
                 await interaction.followup.send(
                     "❌ Could not retrieve character data! D&D Beyond returned a `403 Forbidden` error.\n\n"
-                    "**Fix:** The bot cannot read Private character sheets. Please go to your character's `Preferences` page on D&D Beyond and ensure **Character Privacy** is set to **Public**."
+                    "**Fix:** The bot cannot read Private character sheets. Please go to your character's `Preferences` page on D&D Beyond and ensure **Character Privacy** is set to **Public**.",
+                    ephemeral=True,
                 )
             else:
-                await interaction.followup.send(f"Could not fetch character data due to an HTTP error: {e}")
+                await interaction.followup.send(f"Could not fetch character data due to an HTTP error: {e}", ephemeral=True)
             print(f"HTTPError fetching D&D Beyond character: {e}")
         except requests.exceptions.RequestException as e:
-            await interaction.followup.send(f"Could not fetch character data due to a network error: {e}")
+            await interaction.followup.send(f"Could not fetch character data due to a network error: {e}", ephemeral=True)
             print(f"Network error fetching D&D Beyond character: {e}")
         except json.JSONDecodeError:
-            await interaction.followup.send("Could not parse D&D Beyond character data. The response was not valid JSON.")
+            await interaction.followup.send("Could not parse D&D Beyond character data. The response was not valid JSON.", ephemeral=True)
             print("JSONDecodeError for D&D Beyond character data.")
         except Exception as e:
-            await interaction.followup.send(f"An unexpected error occurred while fetching character data: {e}")
+            await interaction.followup.send(f"An unexpected error occurred while fetching character data: {e}", ephemeral=True)
             print(f"Unexpected error in /character add command: {e}")
 
     @char_group.command(name="list", description="List all your currently saved D&D Beyond characters")
@@ -128,7 +129,7 @@ class Characters(commands.Cog):
 
         embed.description = "\n".join(description_parts)
         embed.set_footer(text="Use /character play to set your character for the next session.")
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def play_autocomplete(self, interaction: discord.Interaction, current: str):
         user_characters = self.characters.get(interaction.user.id, [])
