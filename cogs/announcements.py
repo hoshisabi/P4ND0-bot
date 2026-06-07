@@ -141,6 +141,42 @@ class Announcements(commands.Cog):
 
         return embed
 
+    @discord.app_commands.command(name="announce", description="Post the P4ND0 abilities ad (with today's session if there is one).")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def announce(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        now = datetime.now(EASTERN)
+        today_session = None
+        try:
+            result = self.warhorn_client.get_event_sessions(WARHORN_SLUG)
+            nodes = result.get("data", {}).get("eventSessions", {}).get("nodes", [])
+            today_session = next(
+                (s for s in nodes
+                 if datetime.fromisoformat(s["startsAt"].replace("Z", "+00:00")).astimezone(EASTERN).date() == now.date()),
+                None,
+            )
+        except Exception as e:
+            print(f"[Announcements] /announce Warhorn fetch failed: {e}")
+
+        channel = self.bot.get_channel(DAN_TEXT_CHANNEL_ID)
+        if not channel:
+            channel = await self.bot.fetch_channel(DAN_TEXT_CHANNEL_ID)
+
+        if today_session:
+            embed = self._session_embed(today_session, title_prefix="Today's session")
+            embed.add_field(name="​", value=ABILITIES_TEXT, inline=False)
+        else:
+            embed = discord.Embed(description=ABILITIES_TEXT, color=discord.Color.blurple())
+
+        await channel.send(embed=embed)
+        await interaction.followup.send("Posted.", ephemeral=True)
+
+    @announce.error
+    async def announce_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+        if isinstance(error, discord.app_commands.MissingPermissions):
+            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+
     @check_announcements.before_loop
     async def before_check_announcements(self):
         await self.bot.wait_until_ready()
