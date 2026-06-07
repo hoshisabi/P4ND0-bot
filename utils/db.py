@@ -58,6 +58,45 @@ def init_schema():
                 PRIMARY KEY (channel_id)
             ) CHARACTER SET utf8mb4
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                warhorn_session_id VARCHAR(255) NOT NULL UNIQUE,
+                session_name VARCHAR(255) NOT NULL,
+                session_starts_at TIMESTAMP NOT NULL,
+                voice_channel_id BIGINT,
+                logged_by BIGINT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) CHARACTER SET utf8mb4
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS session_players (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                session_id INT NOT NULL,
+                discord_user_id BIGINT NOT NULL,
+                display_name VARCHAR(255),
+                character_url VARCHAR(500),
+                character_name VARCHAR(255),
+                UNIQUE KEY uq_session_player (session_id, discord_user_id)
+            ) CHARACTER SET utf8mb4
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS session_character_selections (
+                discord_user_id BIGINT PRIMARY KEY,
+                character_url VARCHAR(500) NOT NULL,
+                character_name VARCHAR(255) NOT NULL,
+                set_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) CHARACTER SET utf8mb4
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS announcement_log (
+                warhorn_session_id VARCHAR(255) NOT NULL,
+                announcement_type VARCHAR(50) NOT NULL,
+                fired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (warhorn_session_id, announcement_type)
+            ) CHARACTER SET utf8mb4
+        """)
         conn.commit()
         cursor.close()
     finally:
@@ -367,6 +406,132 @@ def remove_last_sessions(channel_id: int):
     try:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM last_warhorn_sessions WHERE channel_id=%s", (channel_id,))
+        conn.commit()
+        cursor.close()
+    finally:
+        conn.close()
+
+
+# --- Session Character Selections ---
+
+def get_character_selection(user_id: int):
+    conn = _connect()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT character_url, character_name FROM session_character_selections WHERE discord_user_id=%s",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        return row
+    finally:
+        conn.close()
+
+
+def set_character_selection(user_id: int, character_url: str, character_name: str):
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO session_character_selections (discord_user_id, character_url, character_name)
+               VALUES (%s, %s, %s)
+               ON DUPLICATE KEY UPDATE character_url=VALUES(character_url), character_name=VALUES(character_name)""",
+            (user_id, character_url, character_name),
+        )
+        conn.commit()
+        cursor.close()
+    finally:
+        conn.close()
+
+
+def clear_character_selections(user_ids: list):
+    if not user_ids:
+        return
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        placeholders = ",".join(["%s"] * len(user_ids))
+        cursor.execute(
+            f"DELETE FROM session_character_selections WHERE discord_user_id IN ({placeholders})",
+            user_ids,
+        )
+        conn.commit()
+        cursor.close()
+    finally:
+        conn.close()
+
+
+# --- Sessions ---
+
+def upsert_session(warhorn_session_id: str, session_name: str, session_starts_at, voice_channel_id: int, logged_by: int) -> int:
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO sessions (warhorn_session_id, session_name, session_starts_at, voice_channel_id, logged_by)
+               VALUES (%s, %s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE
+                   id = LAST_INSERT_ID(id),
+                   session_name = VALUES(session_name),
+                   session_starts_at = VALUES(session_starts_at),
+                   voice_channel_id = VALUES(voice_channel_id),
+                   logged_by = VALUES(logged_by),
+                   updated_at = CURRENT_TIMESTAMP""",
+            (warhorn_session_id, session_name, session_starts_at, voice_channel_id, logged_by),
+        )
+        conn.commit()
+        session_id = cursor.lastrowid
+        cursor.close()
+        return session_id
+    finally:
+        conn.close()
+
+
+def upsert_session_player(session_id: int, discord_user_id: int, display_name: str, character_url, character_name):
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO session_players (session_id, discord_user_id, display_name, character_url, character_name)
+               VALUES (%s, %s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE
+                   display_name = VALUES(display_name),
+                   character_url = VALUES(character_url),
+                   character_name = VALUES(character_name)""",
+            (session_id, discord_user_id, display_name, character_url, character_name),
+        )
+        conn.commit()
+        cursor.close()
+    finally:
+        conn.close()
+
+
+# --- Announcement Log ---
+
+def has_announcement_fired(warhorn_session_id: str, announcement_type: str) -> bool:
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM announcement_log WHERE warhorn_session_id=%s AND announcement_type=%s",
+            (warhorn_session_id, announcement_type),
+        )
+        result = cursor.fetchone() is not None
+        cursor.close()
+        return result
+    finally:
+        conn.close()
+
+
+def mark_announcement_fired(warhorn_session_id: str, announcement_type: str):
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT IGNORE INTO announcement_log (warhorn_session_id, announcement_type) VALUES (%s, %s)",
+            (warhorn_session_id, announcement_type),
+        )
         conn.commit()
         cursor.close()
     finally:

@@ -30,7 +30,7 @@ class P4ND0Bot(commands.Bot):
             print(f"Database initialization failed: {e}")
 
         # Load cogs
-        cogs = ['cogs.utility', 'cogs.characters', 'cogs.warhorn', 'cogs.rss']
+        cogs = ['cogs.utility', 'cogs.characters', 'cogs.warhorn', 'cogs.rss', 'cogs.sessions', 'cogs.announcements']
         for cog in cogs:
             try:
                 await self.load_extension(cog)

@@ -121,14 +121,54 @@ class Characters(commands.Cog):
             color=discord.Color.purple()
         )
         description_parts = []
-        for char_entry in user_characters:
+        for i, char_entry in enumerate(user_characters):
             char_name = char_entry.get("name", "Unknown Character")
             char_url = char_entry.get("url", "#")
-            description_parts.append(f"• [{char_name}]({char_url})")
+            description_parts.append(f"{i + 1}. [{char_name}]({char_url})")
 
         embed.description = "\n".join(description_parts)
-        embed.set_footer(text="Click on a character name to view it on D&D Beyond.")
+        embed.set_footer(text="Use /character play to set your character for the next session.")
         await interaction.response.send_message(embed=embed)
+
+    async def play_autocomplete(self, interaction: discord.Interaction, current: str):
+        user_characters = self.characters.get(interaction.user.id, [])
+        return [
+            app_commands.Choice(name=f"{i + 1}. {char['name']}", value=str(i + 1))
+            for i, char in enumerate(user_characters)
+            if current.lower() in char["name"].lower()
+        ][:25]
+
+    @char_group.command(name="play", description="Set which character you're playing in the next session")
+    @app_commands.describe(character="Your character for this session")
+    @app_commands.autocomplete(character=play_autocomplete)
+    async def play(self, interaction: discord.Interaction, character: str):
+        user_characters = self.characters.get(interaction.user.id, [])
+
+        try:
+            idx = int(character) - 1
+        except ValueError:
+            await interaction.response.send_message("Invalid selection.", ephemeral=True)
+            return
+
+        if not user_characters or idx < 0 or idx >= len(user_characters):
+            await interaction.response.send_message(
+                "Invalid selection. Use `/character list` to see your characters.",
+                ephemeral=True,
+            )
+            return
+
+        char = user_characters[idx]
+        db.set_character_selection(interaction.user.id, char["url"], char["name"])
+
+        embed = discord.Embed(
+            title=f"Ready for session: {char['name']}",
+            url=char["url"],
+            color=discord.Color.green(),
+        )
+        if char.get("avatar_url"):
+            embed.set_thumbnail(url=char["avatar_url"])
+        embed.set_footer(text="Your character has been set for the next session.")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Characters(bot))
