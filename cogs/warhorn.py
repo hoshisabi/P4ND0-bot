@@ -199,8 +199,8 @@ class Warhorn(commands.Cog):
         await interaction.response.defer()
         # Default to False (Summary View) if not provided
         is_full = view_type.value == 1 if view_type else False
-        embed_to_send, _ = await self.get_warhorn_embed_and_data(is_full) 
-        await interaction.followup.send(embed=embed_to_send)
+        embed_to_send, _ = await self.get_warhorn_embed_and_data(is_full)
+        await interaction.followup.send(embed=embed_to_send, ephemeral=True)
 
     @app_commands.command(name="watch", description="Watches this channel for Warhorn updates, keeping the schedule at the bottom.")
     async def watch(self, interaction: discord.Interaction):

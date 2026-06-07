@@ -9,6 +9,40 @@ class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @app_commands.command(name="help", description="Show all available P4ND0 commands")
+    async def help(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="P4ND0 Commands",
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(
+            name="Characters",
+            value=(
+                "`/character add` — Save a D&D Beyond character to your profile\n"
+                "`/character list` — View your saved characters\n"
+                "`/character play` — Set which character you're using in the next session"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Schedule",
+            value=(
+                "`/schedule` — View upcoming Warhorn sessions (only you see it)\n"
+                "`/watch` — Pin a live-updating schedule to this channel\n"
+                "`/unwatch` — Remove the pinned schedule from this channel"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Utility",
+            value=(
+                "`/roll` — Roll dice in NdN format (e.g., `2d6`, `1d20`)\n"
+                "`/quote` — Get a random inspirational quote"
+            ),
+            inline=False,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @app_commands.command(name="quote", description="Generate a random quote")
     async def quote(self, interaction: discord.Interaction):
         await interaction.response.defer()
