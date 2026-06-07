@@ -92,5 +92,19 @@ class Utility(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
+    @commands.command(name="sync")
+    @commands.has_permissions(administrator=True)
+    async def sync(self, ctx):
+        """Force-sync slash commands. Guild sync is instant; global sync can take up to an hour."""
+        guild_synced = await self.bot.tree.sync(guild=ctx.guild)
+        global_synced = await self.bot.tree.sync()
+        await ctx.send(
+            f"Synced {len(guild_synced)} commands to this server (instant) "
+            f"and {len(global_synced)} globally (up to 1 hour).",
+            delete_after=15,
+        )
+        print(f"[Sync] Manual sync triggered by {ctx.author}: {len(guild_synced)} guild, {len(global_synced)} global.")
+
+
 async def setup(bot):
     await bot.add_cog(Utility(bot))
