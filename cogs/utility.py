@@ -9,8 +9,8 @@ class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="help", description="Show all available P4ND0 commands")
-    async def help(self, interaction: discord.Interaction):
+    @staticmethod
+    def _build_help_embed():
         embed = discord.Embed(
             title="P4ND0 Commands",
             color=discord.Color.blurple(),
@@ -42,7 +42,15 @@ class Utility(commands.Cog):
             ),
             inline=False,
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return embed
+
+    @app_commands.command(name="help", description="Show all available P4ND0 commands")
+    async def help(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=self._build_help_embed(), ephemeral=True)
+
+    @app_commands.command(name="p4help", description="Show all available P4ND0 commands (alias for /help)")
+    async def p4help(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=self._build_help_embed(), ephemeral=True)
 
     @app_commands.command(name="quote", description="Generate a random quote")
     async def quote(self, interaction: discord.Interaction):
