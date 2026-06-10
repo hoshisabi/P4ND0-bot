@@ -10,12 +10,53 @@ from utils.warhorn_api import WarhornClient
 
 WARHORN_SLUG = "pandodnd"
 WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
+DAN_TEXT_CHANNEL_ID = 701628514004238416
+DAN_SESSION_LOGS_CHANNEL_ID = 1324201074382344213
+REWARDS_STATIC = "10 downtime, level if you want it"
+DEFAULT_STREAMING = "2 hours streaming"
 
 
 class Sessions(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.warhorn_client = WarhornClient(WARHORN_API_ENDPOINT, os.getenv("WARHORN_APPLICATION_TOKEN"))
+
+    async def _get_channel(self, channel_id: int):
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            channel = await self.bot.fetch_channel(channel_id)
+        return channel
+
+    def _warhorn_next_session_name(self) -> str | None:
+        try:
+            result = self.warhorn_client.get_event_sessions(WARHORN_SLUG)
+            nodes = result.get("data", {}).get("eventSessions", {}).get("nodes", [])
+        except Exception as e:
+            print(f"[Sessions] Warhorn fetch failed: {e}")
+            return None
+
+        if not nodes:
+            return None
+
+        session = min(nodes, key=lambda x: datetime.fromisoformat(x["startsAt"].replace("Z", "+00:00")))
+        return session.get("name")
+
+    def _derive_adventure_name(self) -> str | None:
+        latest = db.get_latest_session()
+        if latest and latest.get("session_name"):
+            return latest["session_name"]
+        return self._warhorn_next_session_name()
+
+    @staticmethod
+    def _format_rewards_message(rewards: str, adventure: str | None, streaming: str) -> str:
+        rewards = rewards.strip()
+        if REWARDS_STATIC in rewards:
+            return rewards
+
+        if not adventure:
+            raise ValueError("no_adventure")
+
+        return f"{adventure}, {REWARDS_STATIC}, {streaming}, {rewards}"
 
     @app_commands.command(name="gotime", description="Log the current session with everyone in your voice channel.")
     @app_commands.checks.has_permissions(administrator=True)
@@ -97,8 +138,59 @@ class Sessions(commands.Cog):
 
         await interaction.followup.send(embed=embed)
 
+    @app_commands.command(name="rewards", description="Post session rewards to #dan-session-logs and link in #dan-text.")
+    @app_commands.describe(
+        rewards="Gold and magic items (e.g. `116.67gp each, ring of protection (guardian), scroll of tongues`)",
+        adventure="Adventure name (defaults to the latest /gotime session)",
+        streaming="Streaming time (defaults to `2 hours streaming`)",
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def rewards(
+        self,
+        interaction: discord.Interaction,
+        rewards: str,
+        adventure: str | None = None,
+        streaming: str = DEFAULT_STREAMING,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        resolved_adventure = adventure or self._derive_adventure_name()
+
+        try:
+            message_text = self._format_rewards_message(rewards, resolved_adventure, streaming)
+        except ValueError:
+            await interaction.followup.send(
+                "Could not determine the adventure name. Run `/gotime` first or pass the `adventure` option.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            logs_channel = await self._get_channel(DAN_SESSION_LOGS_CHANNEL_ID)
+            text_channel = await self._get_channel(DAN_TEXT_CHANNEL_ID)
+        except Exception as e:
+            await interaction.followup.send(f"Could not access a target channel: {e}", ephemeral=True)
+            return
+
+        logs_message = await logs_channel.send(message_text)
+
+        adventure_label = resolved_adventure or message_text.split(",")[0]
+        await text_channel.send(
+            f"📋 **Rewards posted** for {adventure_label} → {logs_message.jump_url}"
+        )
+
+        await interaction.followup.send(
+            f"Posted rewards to {logs_channel.mention} and linked in {text_channel.mention}.",
+            ephemeral=True,
+        )
+
     @gotime.error
     async def gotime_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message("Only the GM can run this command.", ephemeral=True)
+
+    @rewards.error
+    async def rewards_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message("Only the GM can run this command.", ephemeral=True)
 

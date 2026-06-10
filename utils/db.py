@@ -512,6 +512,20 @@ def upsert_session_player(session_id: int, discord_user_id: int, display_name: s
         conn.close()
 
 
+def get_latest_session():
+    conn = _connect()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT session_name FROM sessions ORDER BY updated_at DESC LIMIT 1",
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        return row
+    finally:
+        conn.close()
+
+
 # --- Announcement Log ---
 
 def has_announcement_fired(warhorn_session_id: str, announcement_type: str) -> bool:
