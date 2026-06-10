@@ -55,6 +55,7 @@ class Utility(commands.Cog):
                     "`/gotime` — Log the current voice channel session\n"
                     "`/rewards` — Post session rewards to #dan-session-logs\n"
                     "`/announce` — Post the P4ND0 abilities ad\n"
+                    "`/character add player` — Add a character to another player's profile\n"
                     "`/character list player` — View another player's characters\n"
                     "`/character play player` / `url` — Set a player's session character\n"
                     "`$sync` — Force-sync slash commands to this server"

@@ -94,14 +94,31 @@ class Characters(commands.Cog):
             await send(f"An unexpected error occurred while fetching character data: {error}")
             print(f"Unexpected error fetching D&D Beyond character: {error}")
 
-    @char_group.command(name="add", description="Add or update a D&D Beyond character to your profile")
-    @app_commands.describe(url="The full link to your D&D Beyond character sheet (e.g., https://www.dndbeyond.com/characters/12345)")
-    async def add(self, interaction: discord.Interaction, url: str):
+    @char_group.command(name="add", description="Add or update a D&D Beyond character to a player's profile")
+    @app_commands.describe(
+        url="The full link to your D&D Beyond character sheet (e.g., https://www.dndbeyond.com/characters/12345)",
+        player="Another player to add to (admin only)",
+    )
+    async def add(
+        self,
+        interaction: discord.Interaction,
+        url: str,
+        player: discord.Member | None = None,
+    ):
         """
         Adds a D&D Beyond character using its URL.
         """
+        if player and player.id != interaction.user.id:
+            if not interaction.user.guild_permissions.administrator:
+                await interaction.response.send_message(
+                    "Only admins can add a character to another player's profile.",
+                    ephemeral=True,
+                )
+                return
+
         await interaction.response.defer(ephemeral=True)
-        user_id = interaction.user.id
+        target = player or interaction.user
+        added_by_other = target.id != interaction.user.id
 
         character_id = self._extract_character_id(url)
         if not character_id:
@@ -112,16 +129,22 @@ class Characters(commands.Cog):
 
         try:
             character_name, avatar_url = await self._fetch_character_from_ddb(character_id)
-            was_new = self._upsert_user_character(user_id, clean_url, character_name, avatar_url)
+            was_new = self._upsert_user_character(target.id, clean_url, character_name, avatar_url)
 
-            title = f"Character Added: {character_name}" if was_new else f"Character Updated: {character_name}"
+            if added_by_other:
+                title = f"{target.display_name} — {'Character Added' if was_new else 'Character Updated'}: {character_name}"
+                footer = f"Added by {interaction.user.display_name}"
+            else:
+                title = f"Character Added: {character_name}" if was_new else f"Character Updated: {character_name}"
+                footer = f"Saved for {target.display_name}"
+
             embed = discord.Embed(title=title, url=clean_url, color=discord.Color.gold())
             if avatar_url:
                 embed.set_thumbnail(url=avatar_url)
-            embed.set_footer(text=f"Saved for {interaction.user.display_name}")
+            embed.set_footer(text=footer)
 
             await interaction.followup.send(embed=embed, ephemeral=True)
-            print(f"User {interaction.user.id} added/updated character: {character_name} ({clean_url})")
+            print(f"User {interaction.user.id} added/updated character for {target.id}: {character_name} ({clean_url})")
         except Exception as e:
             await self._handle_ddb_fetch_error(
                 lambda msg: interaction.followup.send(msg, ephemeral=True), e
