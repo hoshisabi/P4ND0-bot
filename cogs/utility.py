@@ -10,7 +10,11 @@ class Utility(commands.Cog):
         self.bot = bot
 
     @staticmethod
-    def _build_help_embed():
+    def _is_admin(interaction: discord.Interaction) -> bool:
+        return bool(interaction.guild and interaction.user.guild_permissions.administrator)
+
+    @staticmethod
+    def _build_help_embed(*, is_admin: bool = False):
         embed = discord.Embed(
             title="P4ND0 Commands",
             color=discord.Color.blurple(),
@@ -19,8 +23,9 @@ class Utility(commands.Cog):
             name="Characters",
             value=(
                 "`/character add` — Save a D&D Beyond character to your profile\n"
-                "`/character list` — View your saved characters\n"
-                "`/character play` — Set which character you're using in the next session"
+                "`/character list` — View your saved characters and session pick\n"
+                "`/character play` — Set which character you're using in the next session\n"
+                "*Paste a D&D Beyond link in chat to add and set your character automatically.*"
             ),
             inline=False,
         )
@@ -38,19 +43,39 @@ class Utility(commands.Cog):
             name="Utility",
             value=(
                 "`/roll` — Roll dice in NdN format (e.g., `2d6`, `1d20`)\n"
-                "`/quote` — Get a random inspirational quote"
+                "`/quote` — Get a random inspirational quote\n"
+                "`/help` or `/p4help` — Show this command list"
             ),
             inline=False,
         )
+        if is_admin:
+            embed.add_field(
+                name="GM / Admin",
+                value=(
+                    "`/gotime` — Log the current voice channel session\n"
+                    "`/rewards` — Post session rewards to #dan-session-logs\n"
+                    "`/announce` — Post the P4ND0 abilities ad\n"
+                    "`/character list player` — View another player's characters\n"
+                    "`/character play player` / `url` — Set a player's session character\n"
+                    "`$sync` — Force-sync slash commands to this server"
+                ),
+                inline=False,
+            )
         return embed
 
     @app_commands.command(name="help", description="Show all available P4ND0 commands")
     async def help(self, interaction: discord.Interaction):
-        await interaction.response.send_message(embed=self._build_help_embed(), ephemeral=True)
+        is_admin = self._is_admin(interaction)
+        await interaction.response.send_message(
+            embed=self._build_help_embed(is_admin=is_admin), ephemeral=True
+        )
 
     @app_commands.command(name="p4help", description="Show all available P4ND0 commands (alias for /help)")
     async def p4help(self, interaction: discord.Interaction):
-        await interaction.response.send_message(embed=self._build_help_embed(), ephemeral=True)
+        is_admin = self._is_admin(interaction)
+        await interaction.response.send_message(
+            embed=self._build_help_embed(is_admin=is_admin), ephemeral=True
+        )
 
     @app_commands.command(name="quote", description="Generate a random quote")
     async def quote(self, interaction: discord.Interaction):
@@ -100,10 +125,11 @@ class Utility(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @commands.command(name="sync")
+    @commands.command(name="sync", aliases=["refresh"])
     @commands.has_permissions(administrator=True)
     async def sync(self, ctx):
         """Force-sync slash commands. Guild sync is instant; global sync can take up to an hour."""
+        self.bot.tree.copy_global_to(guild=ctx.guild)
         guild_synced = await self.bot.tree.sync(guild=ctx.guild)
         global_synced = await self.bot.tree.sync()
         await ctx.send(
