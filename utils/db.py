@@ -1,6 +1,11 @@
 import os
 import json
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
 import mysql.connector
+
+EASTERN = ZoneInfo("America/New_York")
 
 
 def _connect():
@@ -66,10 +71,16 @@ def init_schema():
                 session_starts_at TIMESTAMP NOT NULL,
                 voice_channel_id BIGINT,
                 logged_by BIGINT,
+                selections_cleared TINYINT(1) NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) CHARACTER SET utf8mb4
         """)
+        cursor.execute("SHOW COLUMNS FROM sessions LIKE 'selections_cleared'")
+        if not cursor.fetchone():
+            cursor.execute(
+                "ALTER TABLE sessions ADD COLUMN selections_cleared TINYINT(1) NOT NULL DEFAULT 0"
+            )
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS session_players (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -100,6 +111,16 @@ def init_schema():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS schedule_subscribers (
                 discord_user_id BIGINT PRIMARY KEY
+            ) CHARACTER SET utf8mb4
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS session_wishlist (
+                warhorn_session_id VARCHAR(255) NOT NULL,
+                discord_user_id BIGINT NOT NULL,
+                display_name VARCHAR(255),
+                added_by BIGINT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (warhorn_session_id, discord_user_id)
             ) CHARACTER SET utf8mb4
         """)
         conn.commit()
@@ -467,6 +488,63 @@ def clear_character_selections(user_ids: list):
         conn.close()
 
 
+def _eastern_date(value):
+    if isinstance(value, datetime):
+        starts_at = value
+        if starts_at.tzinfo is None:
+            starts_at = starts_at.replace(tzinfo=timezone.utc)
+    else:
+        starts_at = datetime.fromisoformat(str(value)).replace(tzinfo=timezone.utc)
+    return starts_at.astimezone(EASTERN).date()
+
+
+def clear_stale_session_selections(today_eastern=None) -> int:
+    """Clear /character play selections for sessions before today (Eastern). Returns count cleared."""
+    today_eastern = today_eastern or datetime.now(EASTERN).date()
+    conn = _connect()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT s.id, s.session_starts_at, sp.discord_user_id
+            FROM sessions s
+            JOIN session_players sp ON sp.session_id = s.id
+            WHERE s.selections_cleared = 0
+            """
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+    finally:
+        conn.close()
+
+    sessions_to_clear: dict[int, list[int]] = {}
+    for row in rows:
+        if _eastern_date(row["session_starts_at"]) >= today_eastern:
+            continue
+        sessions_to_clear.setdefault(row["id"], []).append(row["discord_user_id"])
+
+    if not sessions_to_clear:
+        return 0
+
+    cleared_users = 0
+    for session_id, user_ids in sessions_to_clear.items():
+        clear_character_selections(user_ids)
+        cleared_users += len(user_ids)
+        conn = _connect()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE sessions SET selections_cleared = 1 WHERE id = %s",
+                (session_id,),
+            )
+            conn.commit()
+            cursor.close()
+        finally:
+            conn.close()
+
+    return cleared_users
+
+
 # --- Sessions ---
 
 def upsert_session(warhorn_session_id: str, session_name: str, session_starts_at, voice_channel_id: int, logged_by: int) -> int:
@@ -601,5 +679,80 @@ def remove_subscriber(user_id: int):
         cursor.execute("DELETE FROM schedule_subscribers WHERE discord_user_id=%s", (user_id,))
         conn.commit()
         cursor.close()
+    finally:
+        conn.close()
+
+
+# --- Session Wishlist ---
+
+def add_session_wishlist(
+    warhorn_session_id: str,
+    discord_user_id: int,
+    display_name: str,
+    added_by: int,
+) -> bool:
+    """Add a player to a session wishlist. Returns True if newly added."""
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT IGNORE INTO session_wishlist (warhorn_session_id, discord_user_id, display_name, added_by)
+               VALUES (%s, %s, %s, %s)""",
+            (warhorn_session_id, discord_user_id, display_name, added_by),
+        )
+        conn.commit()
+        added = cursor.rowcount == 1
+        cursor.close()
+        return added
+    finally:
+        conn.close()
+
+
+def remove_session_wishlist(warhorn_session_id: str, discord_user_id: int) -> bool:
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM session_wishlist WHERE warhorn_session_id=%s AND discord_user_id=%s",
+            (warhorn_session_id, discord_user_id),
+        )
+        conn.commit()
+        removed = cursor.rowcount > 0
+        cursor.close()
+        return removed
+    finally:
+        conn.close()
+
+
+def get_session_wishlist(warhorn_session_id: str) -> list:
+    conn = _connect()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """SELECT discord_user_id, display_name, added_by, created_at
+               FROM session_wishlist
+               WHERE warhorn_session_id=%s
+               ORDER BY created_at""",
+            (warhorn_session_id,),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return rows
+    finally:
+        conn.close()
+
+
+def clear_session_wishlist(warhorn_session_id: str) -> int:
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM session_wishlist WHERE warhorn_session_id=%s",
+            (warhorn_session_id,),
+        )
+        conn.commit()
+        cleared = cursor.rowcount
+        cursor.close()
+        return cleared
     finally:
         conn.close()

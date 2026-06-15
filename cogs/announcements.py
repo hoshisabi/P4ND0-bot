@@ -1,12 +1,12 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import discord
 from discord.ext import commands, tasks
 
 from utils import db
-from utils.warhorn_api import WarhornClient
+from utils.warhorn_api import WarhornClient, parse_warhorn_dt
 
 EASTERN = ZoneInfo("America/New_York")
 WARHORN_SLUG = "pandodnd"
@@ -41,7 +41,7 @@ class Announcements(commands.Cog):
         now = datetime.now(EASTERN)
 
         try:
-            result = self.warhorn_client.get_event_sessions(WARHORN_SLUG)
+            result = self.warhorn_client.get_sessions_for_gotime(WARHORN_SLUG, now=now.astimezone(timezone.utc))
             nodes = result.get("data", {}).get("eventSessions", {}).get("nodes", [])
         except Exception as e:
             print(f"[Announcements] Failed to fetch Warhorn sessions: {e}")
@@ -56,9 +56,8 @@ class Announcements(commands.Cog):
                 return
 
         today_session = next(
-            (s for s in nodes
-             if datetime.fromisoformat(s["startsAt"].replace("Z", "+00:00")).astimezone(EASTERN).date() == now.date()),
-            None
+            (s for s in nodes if parse_warhorn_dt(s["startsAt"]).astimezone(EASTERN).date() == now.date()),
+            None,
         )
 
         await self._check_noon(now, channel, today_session)
@@ -86,7 +85,7 @@ class Announcements(commands.Cog):
         print(f"[Announcements] Fired day_of_noon for {sentinel}")
 
     async def _check_session_reminders(self, now, channel, session):
-        starts_at = datetime.fromisoformat(session["startsAt"].replace("Z", "+00:00")).astimezone(EASTERN)
+        starts_at = parse_warhorn_dt(session["startsAt"]).astimezone(EASTERN)
         session_id = session["id"]
         unix_ts = int(starts_at.timestamp())
         name = session["name"]
@@ -112,7 +111,7 @@ class Announcements(commands.Cog):
             if uuid else
             f"https://warhorn.net/events/{WARHORN_SLUG}/schedule"
         )
-        starts_at = datetime.fromisoformat(session["startsAt"].replace("Z", "+00:00")).astimezone(EASTERN)
+        starts_at = parse_warhorn_dt(session["startsAt"]).astimezone(EASTERN)
         unix_ts = int(starts_at.timestamp())
         gm = session["gmSignups"][0]["user"]["name"] if session.get("gmSignups") else "TBD"
 
@@ -145,11 +144,10 @@ class Announcements(commands.Cog):
         now = datetime.now(EASTERN)
         today_session = None
         try:
-            result = self.warhorn_client.get_event_sessions(WARHORN_SLUG)
+            result = self.warhorn_client.get_sessions_for_gotime(WARHORN_SLUG, now=now.astimezone(timezone.utc))
             nodes = result.get("data", {}).get("eventSessions", {}).get("nodes", [])
             today_session = next(
-                (s for s in nodes
-                 if datetime.fromisoformat(s["startsAt"].replace("Z", "+00:00")).astimezone(EASTERN).date() == now.date()),
+                (s for s in nodes if parse_warhorn_dt(s["startsAt"]).astimezone(EASTERN).date() == now.date()),
                 None,
             )
         except Exception as e:
