@@ -20,7 +20,32 @@ REWARDS_STATIC = "10 downtime, level if you want it"
 DEFAULT_STREAMING = "2 hours streaming"
 
 
+def _format_user_wishlist(entries: list[dict]) -> str:
+    if not entries:
+        return "*Nothing wishlisted yet.*"
+    return "\n".join(f"• {entry['adventure']}" for entry in entries)
+
+
+def _format_all_wishlists(entries: list[dict]) -> str:
+    if not entries:
+        return "*No wishlist entries yet.*"
+
+    by_adventure: dict[str, list[str]] = {}
+    for entry in entries:
+        by_adventure.setdefault(entry["adventure"], []).append(entry["display_name"])
+
+    sections = []
+    for adventure in sorted(by_adventure, key=str.casefold):
+        names = ", ".join(by_adventure[adventure])
+        sections.append(f"**{adventure}**\n{names}")
+    return "\n\n".join(sections)
+
+
 class Sessions(commands.Cog):
+    wishlist_group = app_commands.Group(
+        name="wishlist",
+        description="Request adventures you'd like the GM to run someday.",
+    )
     def __init__(self, bot):
         self.bot = bot
         self.warhorn_client = WarhornClient(WARHORN_API_ENDPOINT, os.getenv("WARHORN_APPLICATION_TOKEN"))
@@ -93,22 +118,6 @@ class Sessions(commands.Cog):
             })
         return player_data
 
-    @staticmethod
-    def _collect_wishlist_players(warhorn_session_id: str, exclude_user_ids: set[int]) -> list[dict]:
-        wishlist = []
-        for entry in db.get_session_wishlist(warhorn_session_id):
-            user_id = entry["discord_user_id"]
-            if user_id in exclude_user_ids:
-                continue
-            selection = db.get_character_selection(user_id)
-            wishlist.append({
-                "user_id": user_id,
-                "display_name": entry["display_name"],
-                "character_url": selection["character_url"] if selection else None,
-                "character_name": selection["character_name"] if selection else None,
-            })
-        return wishlist
-
     async def _run_gotime(self, interaction: discord.Interaction, *, preview: bool):
         if not interaction.user.voice or not interaction.user.voice.channel:
             await interaction.followup.send("You need to be in a voice channel to run this.", ephemeral=True)
@@ -131,9 +140,6 @@ class Sessions(commands.Cog):
             await interaction.followup.send(error, ephemeral=True)
             return
 
-        voice_user_ids = {p["user_id"] for p in player_data}
-        wishlist_data = self._collect_wishlist_players(session["id"], voice_user_ids)
-
         if not preview:
             starts_at = parse_warhorn_dt(session["startsAt"])
             session_db_id = db.upsert_session(
@@ -151,30 +157,26 @@ class Sessions(commands.Cog):
                     player["character_url"],
                     player["character_name"],
                 )
-            db.clear_session_wishlist(session["id"])
 
-        embed = build_gotime_embed(
-            session,
-            player_data,
-            preview=preview,
-            wishlist_data=wishlist_data,
-        )
+        embed = build_gotime_embed(session, player_data, preview=preview)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @app_commands.command(
-        name="wishlist",
-        description="Request a spot in the upcoming session, or remove yourself from the wishlist.",
-    )
+    @wishlist_group.command(name="add", description="Add an adventure to the wishlist.")
     @app_commands.describe(
-        player="Another player to add or remove (admin only)",
-        remove="Remove from the wishlist instead of adding",
+        adventure="The adventure name (freeform text)",
+        player="Another player to add for (admin only)",
     )
-    async def wishlist(
+    async def wishlist_add(
         self,
         interaction: discord.Interaction,
+        adventure: str,
         player: discord.Member | None = None,
-        remove: bool = False,
     ):
+        adventure = adventure.strip()
+        if not adventure:
+            await interaction.response.send_message("Please provide an adventure name.", ephemeral=True)
+            return
+
         if player and player.id != interaction.user.id:
             if not interaction.user.guild_permissions.administrator:
                 await interaction.response.send_message(
@@ -187,68 +189,119 @@ class Sessions(commands.Cog):
             await interaction.response.send_message("Bots can't be wishlisted.", ephemeral=True)
             return
 
-        await interaction.response.defer(ephemeral=True)
-
-        session, error = self._fetch_current_warhorn_session()
-        if error:
-            await interaction.followup.send(error, ephemeral=True)
-            return
-
         target = player or interaction.user
         added_by_other = target.id != interaction.user.id
-        starts_at = parse_warhorn_dt(session["startsAt"])
-        unix_ts = int(starts_at.timestamp())
 
-        if remove:
-            if not db.remove_session_wishlist(session["id"], target.id):
-                await interaction.followup.send(
-                    f"{target.display_name} is not on the wishlist for **{session['name']}**.",
-                    ephemeral=True,
-                )
-                return
-
-            if added_by_other:
-                message = (
-                    f"Removed {target.display_name} from the wishlist for **{session['name']}** "
-                    f"(<t:{unix_ts}:F>)."
-                )
-            else:
-                message = f"You've been removed from the wishlist for **{session['name']}** (<t:{unix_ts}:F>)."
-            await interaction.followup.send(message, ephemeral=True)
-            return
-
-        newly_added = db.add_session_wishlist(
-            session["id"],
+        newly_added = db.add_adventure_wishlist(
             target.id,
+            adventure,
             target.display_name,
             interaction.user.id,
         )
 
         if not newly_added:
-            await interaction.followup.send(
-                f"{target.display_name} is already on the wishlist for **{session['name']}** (<t:{unix_ts}:F>).",
+            await interaction.response.send_message(
+                f"{target.display_name} already wishlisted **{adventure}**.",
                 ephemeral=True,
             )
             return
 
-        selection = db.get_character_selection(target.id)
-        character_note = ""
-        if selection:
-            character_note = f" Character: [{selection['character_name']}]({selection['character_url']})."
-        elif not added_by_other:
-            character_note = " Use `/character play` to set your character before session time."
-
         if added_by_other:
-            message = (
-                f"Added {target.display_name} to the wishlist for **{session['name']}** "
-                f"(<t:{unix_ts}:F>).{character_note}"
-            )
+            message = f"Added **{adventure}** to {target.display_name}'s wishlist."
         else:
             message = (
-                f"You're on the wishlist for **{session['name']}** (<t:{unix_ts}:F>).{character_note} "
-                "Run `/wishlist remove:true` to take yourself off."
+                f"Added **{adventure}** to your wishlist. "
+                f"Use `/wishlist remove adventure:{adventure}` to take it off."
             )
-        await interaction.followup.send(message, ephemeral=True)
+        await interaction.response.send_message(message, ephemeral=True)
+
+    @wishlist_group.command(name="remove", description="Remove an adventure from the wishlist.")
+    @app_commands.describe(
+        adventure="The adventure name to remove",
+        player="Another player to remove for (admin only)",
+    )
+    async def wishlist_remove(
+        self,
+        interaction: discord.Interaction,
+        adventure: str,
+        player: discord.Member | None = None,
+    ):
+        adventure = adventure.strip()
+        if not adventure:
+            await interaction.response.send_message("Please provide an adventure name.", ephemeral=True)
+            return
+
+        if player and player.id != interaction.user.id:
+            if not interaction.user.guild_permissions.administrator:
+                await interaction.response.send_message(
+                    "Only admins can manage another player's wishlist entry.",
+                    ephemeral=True,
+                )
+                return
+
+        target = player or interaction.user
+        added_by_other = target.id != interaction.user.id
+
+        if not db.remove_adventure_wishlist(target.id, adventure):
+            await interaction.response.send_message(
+                f"{target.display_name} hasn't wishlisted **{adventure}**.",
+                ephemeral=True,
+            )
+            return
+
+        if added_by_other:
+            message = f"Removed **{adventure}** from {target.display_name}'s wishlist."
+        else:
+            message = f"Removed **{adventure}** from your wishlist."
+        await interaction.response.send_message(message, ephemeral=True)
+
+    @wishlist_group.command(name="list", description="View adventure wishlist entries.")
+    @app_commands.describe(
+        all="Show every wishlist entry (admin only)",
+        player="View another player's list (admin only)",
+    )
+    async def wishlist_list(
+        self,
+        interaction: discord.Interaction,
+        all: bool = False,
+        player: discord.Member | None = None,
+    ):
+        is_admin = bool(
+            interaction.guild and interaction.user.guild_permissions.administrator
+        )
+
+        if all:
+            if not is_admin:
+                await interaction.response.send_message(
+                    "Only admins can view the full wishlist.",
+                    ephemeral=True,
+                )
+                return
+
+            entries = db.get_adventure_wishlist()
+            body = _format_all_wishlists(entries)
+            title = "Adventure Wishlist"
+        elif player and player.id != interaction.user.id:
+            if not is_admin:
+                await interaction.response.send_message(
+                    "Only admins can view another player's wishlist.",
+                    ephemeral=True,
+                )
+                return
+
+            entries = db.get_adventure_wishlist_for_user(player.id)
+            body = _format_user_wishlist(entries)
+            title = f"{player.display_name}'s Wishlist"
+        else:
+            entries = db.get_adventure_wishlist_for_user(interaction.user.id)
+            body = _format_user_wishlist(entries)
+            title = "Your Adventure Wishlist"
+
+        if len(body) > 4000:
+            body = body[:3997] + "..."
+
+        embed = discord.Embed(title=title, description=body, color=discord.Color.gold())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="gotime", description="Log the current session with everyone in your voice channel.")
     @app_commands.checks.has_permissions(administrator=True)

@@ -83,7 +83,7 @@ def test_format_obs_copy_includes_title_and_url():
     assert "https://www.dmsguild.com/en/product/531687?affiliate_id=171040" in text
 
 
-def test_build_gotime_embed_includes_wishlisted_players():
+def test_build_gotime_embed_lists_players():
     session = {
         "id": "session-1",
         "name": "Tonight's Game",
@@ -98,22 +98,12 @@ def test_build_gotime_embed_includes_wishlisted_players():
             "character_name": "Alera",
         }
     ]
-    wishlist = [
-        {
-            "user_id": 2,
-            "display_name": "Bob",
-            "character_url": None,
-            "character_name": None,
-        }
-    ]
 
-    embed = build_gotime_embed(session, players, preview=True, wishlist_data=wishlist)
+    embed = build_gotime_embed(session, players, preview=True)
 
     assert embed.title == "Go-time preview: Tonight's Game"
     player_field = next(field for field in embed.fields if field.name.startswith("Players"))
-    wishlist_field = next(field for field in embed.fields if field.name.startswith("Wishlisted"))
     assert "Alice" in player_field.value
-    assert "Bob" in wishlist_field.value
     assert embed.footer.text.startswith("Preview only")
 
 

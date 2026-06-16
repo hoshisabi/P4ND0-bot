@@ -22,7 +22,6 @@ def build_gotime_embed(
     player_data: list[dict],
     *,
     preview: bool,
-    wishlist_data: list[dict] | None = None,
 ) -> discord.Embed:
     starts_at = parse_warhorn_dt(session["startsAt"])
     unix_ts = int(starts_at.timestamp())
@@ -35,16 +34,6 @@ def build_gotime_embed(
 
     lines, unknown = format_player_lines(player_data)
     embed.add_field(name=f"Players ({len(player_data)})", value="\n".join(lines), inline=False)
-
-    wishlist_data = wishlist_data or []
-    if wishlist_data:
-        wishlist_lines, wishlist_unknown = format_player_lines(wishlist_data)
-        embed.add_field(
-            name=f"Wishlisted ({len(wishlist_data)})",
-            value="\n".join(wishlist_lines),
-            inline=False,
-        )
-        unknown.extend(wishlist_unknown)
 
     obs_copy = format_obs_copy(session)
     embed.add_field(

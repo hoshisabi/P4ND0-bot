@@ -34,9 +34,17 @@ class Utility(commands.Cog):
             value=(
                 "`/schedule` — View upcoming Warhorn sessions (only you see it)\n"
                 "`/notify` — Toggle DM notifications when the schedule changes\n"
-                "`/wishlist` — Request a spot in the upcoming session\n"
                 "`/watch` — Pin a live-updating schedule to this channel\n"
                 "`/unwatch` — Remove the pinned schedule from this channel"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Wishlist",
+            value=(
+                "`/wishlist add adventure` — Request an adventure you'd like run someday\n"
+                "`/wishlist remove adventure` — Remove one of your requests\n"
+                "`/wishlist list` — View your wishlist"
             ),
             inline=False,
         )
@@ -56,7 +64,9 @@ class Utility(commands.Cog):
                     "`/gotime` — Log the current voice channel session\n"
                     "`/gotime-preview` — Preview what /gotime would do (no changes)\n"
                     "`/rewards` — Post session rewards to #dan-session-logs\n"
-                    "`/wishlist player` — Add another player to the session wishlist\n"
+                    "`/wishlist add adventure player` — Add an adventure request for another player\n"
+                    "`/wishlist list all:true` — View every adventure request\n"
+                    "`/wishlist list player` — View another player's requests\n"
                     "`/announce` — Post the P4ND0 abilities ad\n"
                     "`/character add player` — Add a character to another player's profile\n"
                     "`/character list player` — View another player's characters\n"

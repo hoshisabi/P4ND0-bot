@@ -114,15 +114,17 @@ def init_schema():
             ) CHARACTER SET utf8mb4
         """)
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS session_wishlist (
-                warhorn_session_id VARCHAR(255) NOT NULL,
+            CREATE TABLE IF NOT EXISTS adventure_wishlist (
                 discord_user_id BIGINT NOT NULL,
+                adventure VARCHAR(255) NOT NULL,
                 display_name VARCHAR(255),
                 added_by BIGINT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (warhorn_session_id, discord_user_id)
+                PRIMARY KEY (discord_user_id, adventure)
             ) CHARACTER SET utf8mb4
         """)
+        cursor.execute("DROP TABLE IF EXISTS player_wishlist")
+        cursor.execute("DROP TABLE IF EXISTS session_wishlist")
         conn.commit()
         cursor.close()
     finally:
@@ -683,22 +685,23 @@ def remove_subscriber(user_id: int):
         conn.close()
 
 
-# --- Session Wishlist ---
+# --- Adventure Wishlist ---
 
-def add_session_wishlist(
-    warhorn_session_id: str,
+def add_adventure_wishlist(
     discord_user_id: int,
+    adventure: str,
     display_name: str,
     added_by: int,
 ) -> bool:
-    """Add a player to a session wishlist. Returns True if newly added."""
+    """Request an adventure to be run. Returns True if newly added."""
+    adventure = adventure.strip()
     conn = _connect()
     try:
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT IGNORE INTO session_wishlist (warhorn_session_id, discord_user_id, display_name, added_by)
+            """INSERT IGNORE INTO adventure_wishlist (discord_user_id, adventure, display_name, added_by)
                VALUES (%s, %s, %s, %s)""",
-            (warhorn_session_id, discord_user_id, display_name, added_by),
+            (discord_user_id, adventure, display_name, added_by),
         )
         conn.commit()
         added = cursor.rowcount == 1
@@ -708,13 +711,14 @@ def add_session_wishlist(
         conn.close()
 
 
-def remove_session_wishlist(warhorn_session_id: str, discord_user_id: int) -> bool:
+def remove_adventure_wishlist(discord_user_id: int, adventure: str) -> bool:
+    adventure = adventure.strip()
     conn = _connect()
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "DELETE FROM session_wishlist WHERE warhorn_session_id=%s AND discord_user_id=%s",
-            (warhorn_session_id, discord_user_id),
+            "DELETE FROM adventure_wishlist WHERE discord_user_id=%s AND adventure=%s",
+            (discord_user_id, adventure),
         )
         conn.commit()
         removed = cursor.rowcount > 0
@@ -724,16 +728,16 @@ def remove_session_wishlist(warhorn_session_id: str, discord_user_id: int) -> bo
         conn.close()
 
 
-def get_session_wishlist(warhorn_session_id: str) -> list:
+def get_adventure_wishlist_for_user(discord_user_id: int) -> list:
     conn = _connect()
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            """SELECT discord_user_id, display_name, added_by, created_at
-               FROM session_wishlist
-               WHERE warhorn_session_id=%s
+            """SELECT discord_user_id, adventure, display_name, added_by, created_at
+               FROM adventure_wishlist
+               WHERE discord_user_id=%s
                ORDER BY created_at""",
-            (warhorn_session_id,),
+            (discord_user_id,),
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -742,17 +746,17 @@ def get_session_wishlist(warhorn_session_id: str) -> list:
         conn.close()
 
 
-def clear_session_wishlist(warhorn_session_id: str) -> int:
+def get_adventure_wishlist() -> list:
     conn = _connect()
     try:
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "DELETE FROM session_wishlist WHERE warhorn_session_id=%s",
-            (warhorn_session_id,),
+            """SELECT discord_user_id, adventure, display_name, added_by, created_at
+               FROM adventure_wishlist
+               ORDER BY adventure, created_at""",
         )
-        conn.commit()
-        cleared = cursor.rowcount
+        rows = cursor.fetchall()
         cursor.close()
-        return cleared
+        return rows
     finally:
         conn.close()
