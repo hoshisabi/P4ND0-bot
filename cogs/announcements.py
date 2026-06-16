@@ -20,6 +20,7 @@ ABILITIES_TEXT = (
     "• `/character list` — see your saved characters\n"
     "• `/character play` — set which character you're using for the next session\n"
     "• `/schedule` — view upcoming Warhorn events\n"
+    "• `/wishlist add` — request an adventure you'd like me to run\n"
     "*Use `/help` for the full command list.*"
 )
 

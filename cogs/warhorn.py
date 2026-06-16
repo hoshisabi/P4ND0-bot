@@ -175,7 +175,9 @@ class Warhorn(commands.Cog):
 
             desc_text += ("*Join the waitlist to be next in line if there is a cancellation.*\n"
                           "*If you are on a waitlist, you may still get a spot due to cancellations.*\n"
-                          "*If you still are unable to attend, I will schedule an encore session and sign you up in advance.*\n")
+                          "*Use `/wishlist add` to request that I run something if you missed a session "
+                          "you wanted to play, or if there's something you'd like me to run. "
+                          "When I schedule your wishlist adventure, I can sign you up in advance.*\n")
             embed = discord.Embed(
                 title="Upcoming Warhorn Events",
                 description=desc_text, 
