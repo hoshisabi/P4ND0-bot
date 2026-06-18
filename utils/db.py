@@ -606,6 +606,27 @@ def get_latest_session():
         conn.close()
 
 
+def get_latest_session_players() -> list[int]:
+    """Discord user IDs for players in the most recently logged /gotime session."""
+    conn = _connect()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT sp.discord_user_id
+            FROM session_players sp
+            JOIN sessions s ON s.id = sp.session_id
+            WHERE s.id = (SELECT id FROM sessions ORDER BY updated_at DESC LIMIT 1)
+            ORDER BY sp.display_name
+            """,
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return [row["discord_user_id"] for row in rows]
+    finally:
+        conn.close()
+
+
 # --- Announcement Log ---
 
 def has_announcement_fired(warhorn_session_id: str, announcement_type: str) -> bool:

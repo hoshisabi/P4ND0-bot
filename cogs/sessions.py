@@ -77,15 +77,31 @@ class Sessions(commands.Cog):
         return self._warhorn_next_session_name()
 
     @staticmethod
-    def _format_rewards_message(rewards: str, adventure: str | None, streaming: str) -> str:
+    def _format_participant_mentions(participant_ids: list[int]) -> str:
+        if not participant_ids:
+            return ""
+        return " ".join(f"<@{user_id}>" for user_id in participant_ids)
+
+    @staticmethod
+    def _format_rewards_message(
+        rewards: str,
+        adventure: str | None,
+        streaming: str,
+        *,
+        participant_ids: list[int] | None = None,
+    ) -> str:
         rewards = rewards.strip()
         if REWARDS_STATIC in rewards:
-            return rewards
-
-        if not adventure:
+            message = rewards
+        elif not adventure:
             raise ValueError("no_adventure")
+        else:
+            message = f"{adventure}, {REWARDS_STATIC}, {streaming}, {rewards}"
 
-        return f"{adventure}, {REWARDS_STATIC}, {streaming}, {rewards}"
+        mentions = Sessions._format_participant_mentions(participant_ids or [])
+        if mentions:
+            message = f"{message}\n{mentions}"
+        return message
 
     def _fetch_current_warhorn_session(self) -> tuple[dict | None, str | None]:
         try:
@@ -335,9 +351,15 @@ class Sessions(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         resolved_adventure = adventure or self._derive_adventure_name()
+        participant_ids = db.get_latest_session_players()
 
         try:
-            message_text = self._format_rewards_message(rewards, resolved_adventure, streaming)
+            message_text = self._format_rewards_message(
+                rewards,
+                resolved_adventure,
+                streaming,
+                participant_ids=participant_ids,
+            )
         except ValueError:
             await interaction.followup.send(
                 "Could not determine the adventure name. Run `/gotime` first or pass the `adventure` option.",
