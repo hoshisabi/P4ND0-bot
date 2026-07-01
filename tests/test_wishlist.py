@@ -65,12 +65,19 @@ def test_format_browse_catalog_uses_continuous_numbering():
     ]
     catalog = build_browse_catalog(wishlist, recent)
 
-    text = format_browse_catalog(catalog)
+    admin_text = format_browse_catalog(catalog, include_requesters=True)
+    player_text = format_browse_catalog(catalog, include_requesters=False)
 
-    assert "**Requested by players**" in text
-    assert "**1.** Absent without Leave — Alice" in text
-    assert "**Recent sessions**" in text
-    assert "**2.** Dragon of Icespire Peak — <t:" in text
+    assert "**Requested by players**" in admin_text
+    assert "**1.** Absent without Leave — Alice" in admin_text
+    assert "**Recent sessions**" in admin_text
+    assert "**2.** Dragon of Icespire Peak — <t:" in admin_text
+
+    assert "**Requested by players**" in player_text
+    assert "**1.** Absent without Leave" in player_text
+    assert "Alice" not in player_text
+    assert "**Recent sessions**" in player_text
+    assert "**2.** Dragon of Icespire Peak — <t:" in player_text
 
 
 def test_resolve_wishlist_number_returns_adventure_name():

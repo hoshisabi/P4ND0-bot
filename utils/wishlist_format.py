@@ -57,7 +57,7 @@ def format_wishlist_catalog(catalog: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def format_browse_catalog(catalog: list[dict]) -> str:
+def format_browse_catalog(catalog: list[dict], *, include_requesters: bool = False) -> str:
     if not catalog:
         return "*Nothing to browse yet.*"
 
@@ -65,8 +65,11 @@ def format_browse_catalog(catalog: list[dict]) -> str:
     warhorn_lines = []
     for index, item in enumerate(catalog, start=1):
         if item["source"] == "wishlist":
-            names = ", ".join(item["requesters"]) if item["requesters"] else "Unknown"
-            wishlist_lines.append(f"**{index}.** {item['adventure']} — {names}")
+            if include_requesters:
+                names = ", ".join(item["requesters"]) if item["requesters"] else "Unknown"
+                wishlist_lines.append(f"**{index}.** {item['adventure']} — {names}")
+            else:
+                wishlist_lines.append(f"**{index}.** {item['adventure']}")
         else:
             played_at = int(item["played_at"].timestamp())
             warhorn_lines.append(f"**{index}.** {item['adventure']} — <t:{played_at}:D>")

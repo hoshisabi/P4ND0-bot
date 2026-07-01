@@ -44,12 +44,12 @@ def _format_all_wishlists(entries: list[dict]) -> str:
     return "\n\n".join(sections)
 
 
-def _wishlist_browse_embed() -> discord.Embed | None:
+def _wishlist_browse_embed(*, include_requesters: bool = False) -> discord.Embed | None:
     catalog = _wishlist_browse_catalog()
     if not catalog:
         return None
 
-    body = format_browse_catalog(catalog)
+    body = format_browse_catalog(catalog, include_requesters=include_requesters)
     if len(body) > 4000:
         body = body[:3997] + "..."
 
@@ -208,7 +208,8 @@ class Sessions(commands.Cog):
 
     @wishlist_group.command(name="browse", description="View adventures others have requested, numbered for easy joining.")
     async def wishlist_browse(self, interaction: discord.Interaction):
-        embed = _wishlist_browse_embed()
+        is_admin = bool(interaction.user.guild_permissions.administrator)
+        embed = _wishlist_browse_embed(include_requesters=is_admin)
         if not embed:
             await interaction.response.send_message(
                 "No adventures on the wishlist yet. Use `/wishlist add adventure:...` to request one.",
@@ -238,7 +239,8 @@ class Sessions(commands.Cog):
             return
 
         if adventure is None and number is None:
-            embed = _wishlist_browse_embed()
+            is_admin = bool(interaction.user.guild_permissions.administrator)
+            embed = _wishlist_browse_embed(include_requesters=is_admin)
             if not embed:
                 await interaction.response.send_message(
                     "No adventures on the wishlist yet. Use `/wishlist add adventure:...` to request one.",
