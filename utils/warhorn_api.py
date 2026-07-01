@@ -15,8 +15,8 @@ OBS_TITLE_PREFIX = "PandoDnD plays: "
 # Final event_sessions_query including the 'uuid' field
 event_sessions_query = """
 #graphql
-query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime) {
-  eventSessions(events: $events, startsAfter: $startsAfter) {
+query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime, $startsBefore: ISO8601DateTime) {
+  eventSessions(events: $events, startsAfter: $startsAfter, startsBefore: $startsBefore) {
     nodes {
       id
       name
@@ -98,6 +98,28 @@ def find_current_session(nodes: list, now: datetime | None = None) -> dict | Non
     return max(nodes, key=lambda s: parse_warhorn_dt(s["startsAt"]))
 
 
+def select_recent_past_sessions(nodes: list, *, limit: int = 8, now: datetime | None = None) -> list[dict]:
+    """Return the most recent past Warhorn sessions, one entry per adventure name."""
+    now = now or datetime.now(timezone.utc)
+    past = sorted(
+        (session for session in nodes if parse_warhorn_dt(session["startsAt"]) < now),
+        key=lambda session: parse_warhorn_dt(session["startsAt"]),
+        reverse=True,
+    )
+
+    recent: list[dict] = []
+    seen: set[str] = set()
+    for session in past:
+        key = session["name"].casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        recent.append(session)
+        if len(recent) >= limit:
+            break
+    return recent
+
+
 def format_obs_copy(session: dict) -> str:
     title = f"{OBS_TITLE_PREFIX}{session['name']}"
     lines = [
@@ -136,12 +158,22 @@ class WarhornClient:
             print(f"Response content: {response.text}")
             raise
 
-    def get_event_sessions(self, event_slug, starts_after: datetime | None = None):
-        if starts_after is None:
-            starts_after = datetime.now(timezone.utc)
+    def get_event_sessions(
+        self,
+        event_slug,
+        starts_after: datetime | None = None,
+        starts_before: datetime | None = None,
+    ):
+        variables = {"events": [event_slug]}
+        if starts_after is not None:
+            variables["startsAfter"] = starts_after.isoformat()
+        elif starts_before is None:
+            variables["startsAfter"] = datetime.now(timezone.utc).isoformat()
+        if starts_before is not None:
+            variables["startsBefore"] = starts_before.isoformat()
         return self.run_query(
             event_sessions_query,
-            variables={"events": [event_slug], "startsAfter": starts_after.isoformat()},
+            variables=variables,
         )
 
     def get_sessions_for_gotime(self, event_slug, now: datetime | None = None):

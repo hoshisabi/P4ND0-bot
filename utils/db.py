@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import mysql.connector
@@ -123,8 +123,19 @@ def init_schema():
                 PRIMARY KEY (discord_user_id, adventure)
             ) CHARACTER SET utf8mb4
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS warhorn_sessions (
+                warhorn_session_id VARCHAR(255) NOT NULL PRIMARY KEY,
+                session_name VARCHAR(255) NOT NULL,
+                session_starts_at TIMESTAMP NOT NULL,
+                session_ends_at TIMESTAMP NULL,
+                last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) CHARACTER SET utf8mb4
+        """)
         cursor.execute("DROP TABLE IF EXISTS player_wishlist")
         cursor.execute("DROP TABLE IF EXISTS session_wishlist")
+        conn.commit()
+        _backfill_warhorn_sessions(cursor)
         conn.commit()
         cursor.close()
     finally:
@@ -440,6 +451,102 @@ def remove_last_sessions(channel_id: int):
         conn.close()
 
 
+def _warhorn_dt_to_db(value: str | datetime | None):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _warhorn_dt_to_iso(value) -> str:
+    dt = _warhorn_dt_to_db(value)
+    return dt.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def record_warhorn_sessions(nodes: list) -> None:
+    """Persist Warhorn sessions we've seen via schedule polling or other fetches."""
+    if not nodes:
+        return
+
+    conn = _connect()
+    try:
+        cursor = conn.cursor()
+        for session in nodes:
+            cursor.execute(
+                """INSERT INTO warhorn_sessions (warhorn_session_id, session_name, session_starts_at, session_ends_at)
+                   VALUES (%s, %s, %s, %s)
+                   ON DUPLICATE KEY UPDATE
+                       session_name = VALUES(session_name),
+                       session_starts_at = VALUES(session_starts_at),
+                       session_ends_at = VALUES(session_ends_at),
+                       last_seen_at = CURRENT_TIMESTAMP""",
+                (
+                    session["id"],
+                    session["name"],
+                    _warhorn_dt_to_db(session["startsAt"]),
+                    _warhorn_dt_to_db(session.get("endsAt")),
+                ),
+            )
+        conn.commit()
+        cursor.close()
+    finally:
+        conn.close()
+
+
+def _backfill_warhorn_sessions(cursor) -> None:
+    cursor.execute(
+        """
+        INSERT IGNORE INTO warhorn_sessions (warhorn_session_id, session_name, session_starts_at)
+        SELECT warhorn_session_id, session_name, session_starts_at
+        FROM sessions
+        """
+    )
+
+
+def seed_warhorn_sessions_from_cache() -> None:
+    for sessions_data in load_all_last_sessions().values():
+        record_warhorn_sessions(sessions_data)
+
+
+def get_recent_warhorn_sessions(limit: int = 8, now: datetime | None = None) -> list[dict]:
+    """Recent past Warhorn sessions from our local cache, not a live API call."""
+    from utils.warhorn_api import select_recent_past_sessions
+
+    now = now or datetime.now(timezone.utc)
+    conn = _connect()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT warhorn_session_id, session_name, session_starts_at, session_ends_at
+            FROM warhorn_sessions
+            WHERE session_starts_at < %s
+            ORDER BY session_starts_at DESC
+            """,
+            (_warhorn_dt_to_db(now),),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+    finally:
+        conn.close()
+
+    nodes = [
+        {
+            "id": row["warhorn_session_id"],
+            "name": row["session_name"],
+            "startsAt": _warhorn_dt_to_iso(row["session_starts_at"]),
+            "endsAt": _warhorn_dt_to_iso(row["session_ends_at"]) if row["session_ends_at"] else None,
+        }
+        for row in rows
+    ]
+    return select_recent_past_sessions(nodes, limit=limit, now=now)
+
+
 # --- Session Character Selections ---
 
 def get_character_selection(user_id: int):
@@ -592,39 +699,76 @@ def upsert_session_player(session_id: int, discord_user_id: int, display_name: s
         conn.close()
 
 
-def get_latest_session():
+def _reward_reference_dates(now_eastern: datetime) -> set:
+    today = now_eastern.date()
+    dates = {today}
+    if now_eastern.hour < 6:
+        dates.add(today - timedelta(days=1))
+    return dates
+
+
+def select_rewards_session(rows: list[dict], now: datetime | None = None) -> dict | None:
+    """Pick the /gotime session /rewards should use for the current game night."""
+    if not rows:
+        return None
+
+    now_et = now or datetime.now(EASTERN)
+    if now_et.tzinfo is None:
+        now_et = now_et.replace(tzinfo=EASTERN)
+    else:
+        now_et = now_et.astimezone(EASTERN)
+    reference_dates = _reward_reference_dates(now_et)
+
+    by_start = [row for row in rows if _eastern_date(row["session_starts_at"]) in reference_dates]
+    if by_start:
+        return max(by_start, key=lambda row: row["updated_at"])
+
+    by_logged = [row for row in rows if _eastern_date(row["updated_at"]) in reference_dates]
+    if by_logged:
+        return max(by_logged, key=lambda row: row["updated_at"])
+
+    return None
+
+
+def get_rewards_session(now: datetime | None = None):
     conn = _connect()
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT session_name FROM sessions ORDER BY updated_at DESC LIMIT 1",
+            "SELECT id, session_name, session_starts_at, updated_at FROM sessions ORDER BY updated_at DESC",
         )
-        row = cursor.fetchone()
+        rows = cursor.fetchall()
         cursor.close()
-        return row
     finally:
         conn.close()
+    return select_rewards_session(rows, now=now)
 
 
-def get_latest_session_players() -> list[int]:
-    """Discord user IDs for players in the most recently logged /gotime session."""
+def get_session_players(session_id: int) -> list[int]:
     conn = _connect()
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT sp.discord_user_id
-            FROM session_players sp
-            JOIN sessions s ON s.id = sp.session_id
-            WHERE s.id = (SELECT id FROM sessions ORDER BY updated_at DESC LIMIT 1)
-            ORDER BY sp.display_name
+            SELECT discord_user_id
+            FROM session_players
+            WHERE session_id = %s
+            ORDER BY display_name
             """,
+            (session_id,),
         )
         rows = cursor.fetchall()
         cursor.close()
         return [row["discord_user_id"] for row in rows]
     finally:
         conn.close()
+
+
+def get_rewards_session_players(now: datetime | None = None) -> list[int]:
+    session = get_rewards_session(now=now)
+    if not session:
+        return []
+    return get_session_players(session["id"])
 
 
 # --- Announcement Log ---

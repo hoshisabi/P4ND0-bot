@@ -25,6 +25,7 @@ class P4ND0Bot(commands.Bot):
         try:
             db.init_schema()
             db.migrate_from_json()
+            db.seed_warhorn_sessions_from_cache()
             print("Database ready.")
         except Exception as e:
             print(f"Database initialization failed: {e}")

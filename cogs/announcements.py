@@ -20,7 +20,8 @@ ABILITIES_TEXT = (
     "• `/character list` — see your saved characters\n"
     "• `/character play` — set which character you're using for the next session\n"
     "• `/schedule` — view upcoming Warhorn events\n"
-    "• `/wishlist add` — request an adventure you'd like me to run\n"
+    "• `/wishlist browse` — see adventures others requested\n"
+    "• `/wishlist add` — join by number or request a new adventure\n"
     "*Use `/help` for the full command list.*"
 )
 
@@ -44,6 +45,7 @@ class Announcements(commands.Cog):
         try:
             result = self.warhorn_client.get_sessions_for_gotime(WARHORN_SLUG, now=now.astimezone(timezone.utc))
             nodes = result.get("data", {}).get("eventSessions", {}).get("nodes", [])
+            db.record_warhorn_sessions(nodes)
         except Exception as e:
             print(f"[Announcements] Failed to fetch Warhorn sessions: {e}")
             return
@@ -147,6 +149,7 @@ class Announcements(commands.Cog):
         try:
             result = self.warhorn_client.get_sessions_for_gotime(WARHORN_SLUG, now=now.astimezone(timezone.utc))
             nodes = result.get("data", {}).get("eventSessions", {}).get("nodes", [])
+            db.record_warhorn_sessions(nodes)
             today_session = next(
                 (s for s in nodes if parse_warhorn_dt(s["startsAt"]).astimezone(EASTERN).date() == now.date()),
                 None,

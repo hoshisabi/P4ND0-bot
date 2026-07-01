@@ -42,7 +42,8 @@ class Utility(commands.Cog):
         embed.add_field(
             name="Wishlist",
             value=(
-                "`/wishlist add adventure` — Request an adventure you'd like run someday\n"
+                "`/wishlist browse` — See adventures others requested (numbered)\n"
+                "`/wishlist add adventure` or `number` — Join or request an adventure\n"
                 "`/wishlist remove adventure` — Remove one of your requests\n"
                 "`/wishlist list` — View your wishlist"
             ),

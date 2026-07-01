@@ -110,6 +110,7 @@ class Warhorn(commands.Cog):
                 initial_result["data"]["eventSessions"]["nodes"],
                 key=lambda x: datetime.fromisoformat(x["startsAt"].replace("Z", "+00:00"))
             )
+            db.record_warhorn_sessions(sessions_to_display)
 
             if not sessions_to_display:
                 embed = discord.Embed(title="Upcoming Warhorn Events", description="No upcoming sessions found.", color=discord.Color.blue())
@@ -175,8 +176,8 @@ class Warhorn(commands.Cog):
 
             desc_text += ("*Join the waitlist to be next in line if there is a cancellation.*\n"
                           "*If you are on a waitlist, you may still get a spot due to cancellations.*\n"
-                          "*Use `/wishlist add` to request that I run something if you missed a session "
-                          "you wanted to play, or if there's something you'd like me to run. "
+                          "*Use `/wishlist browse` to see what others have requested, then `/wishlist add number:` to join one. "
+                          "Use `/wishlist add adventure:` for something new. "
                           "When I schedule your wishlist adventure, I can sign you up in advance.*\n")
             embed = discord.Embed(
                 title="Upcoming Warhorn Events",

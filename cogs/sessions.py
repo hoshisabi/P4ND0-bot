@@ -11,6 +11,12 @@ from utils.warhorn_api import (
     find_current_session,
     parse_warhorn_dt,
 )
+from utils.wishlist_format import (
+    build_browse_catalog,
+    build_wishlist_catalog,
+    format_browse_catalog,
+    resolve_wishlist_number,
+)
 
 WARHORN_SLUG = "pandodnd"
 WARHORN_API_ENDPOINT = "https://warhorn.net/graphql"
@@ -27,18 +33,39 @@ def _format_user_wishlist(entries: list[dict]) -> str:
 
 
 def _format_all_wishlists(entries: list[dict]) -> str:
-    if not entries:
+    catalog = build_wishlist_catalog(entries)
+    if not catalog:
         return "*No wishlist entries yet.*"
 
-    by_adventure: dict[str, list[str]] = {}
-    for entry in entries:
-        by_adventure.setdefault(entry["adventure"], []).append(entry["display_name"])
-
     sections = []
-    for adventure in sorted(by_adventure, key=str.casefold):
-        names = ", ".join(by_adventure[adventure])
-        sections.append(f"**{adventure}**\n{names}")
+    for item in catalog:
+        names = ", ".join(item["requesters"])
+        sections.append(f"**{item['adventure']}**\n{names}")
     return "\n\n".join(sections)
+
+
+def _wishlist_browse_embed() -> discord.Embed | None:
+    catalog = _wishlist_browse_catalog()
+    if not catalog:
+        return None
+
+    body = format_browse_catalog(catalog)
+    if len(body) > 4000:
+        body = body[:3997] + "..."
+
+    embed = discord.Embed(
+        title="Adventure Wishlist",
+        description=body,
+        color=discord.Color.gold(),
+    )
+    embed.set_footer(
+        text="Use /wishlist add number:N to join a request or pick a recent session, or adventure:... for something new."
+    )
+    return embed
+
+
+def _wishlist_browse_catalog() -> list[dict]:
+    return build_browse_catalog(db.get_adventure_wishlist(), db.get_recent_warhorn_sessions(limit=8))
 
 
 class Sessions(commands.Cog):
@@ -56,9 +83,9 @@ class Sessions(commands.Cog):
             channel = await self.bot.fetch_channel(channel_id)
         return channel
 
-    def _warhorn_next_session_name(self) -> str | None:
+    def _warhorn_current_session_name(self) -> str | None:
         try:
-            result = self.warhorn_client.get_event_sessions(WARHORN_SLUG)
+            result = self.warhorn_client.get_sessions_for_gotime(WARHORN_SLUG)
             nodes = result.get("data", {}).get("eventSessions", {}).get("nodes", [])
         except Exception as e:
             print(f"[Sessions] Warhorn fetch failed: {e}")
@@ -67,14 +94,14 @@ class Sessions(commands.Cog):
         if not nodes:
             return None
 
-        session = min(nodes, key=lambda x: parse_warhorn_dt(x["startsAt"]))
-        return session.get("name")
+        session = find_current_session(nodes)
+        return session.get("name") if session else None
 
-    def _derive_adventure_name(self) -> str | None:
-        latest = db.get_latest_session()
-        if latest and latest.get("session_name"):
-            return latest["session_name"]
-        return self._warhorn_next_session_name()
+    def _derive_adventure_name(self, rewards_session: dict | None = None) -> str | None:
+        session = rewards_session if rewards_session is not None else db.get_rewards_session()
+        if session and session.get("session_name"):
+            return session["session_name"]
+        return self._warhorn_current_session_name()
 
     @staticmethod
     def _format_participant_mentions(participant_ids: list[int]) -> str:
@@ -112,6 +139,8 @@ class Sessions(commands.Cog):
 
         if not nodes:
             return None, "No Warhorn sessions found for today."
+
+        db.record_warhorn_sessions(nodes)
 
         session = find_current_session(nodes)
         if not session:
@@ -177,21 +206,63 @@ class Sessions(commands.Cog):
         embed = build_gotime_embed(session, player_data, preview=preview)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+    @wishlist_group.command(name="browse", description="View adventures others have requested, numbered for easy joining.")
+    async def wishlist_browse(self, interaction: discord.Interaction):
+        embed = _wishlist_browse_embed()
+        if not embed:
+            await interaction.response.send_message(
+                "No adventures on the wishlist yet. Use `/wishlist add adventure:...` to request one.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @wishlist_group.command(name="add", description="Add an adventure to the wishlist.")
     @app_commands.describe(
-        adventure="The adventure name (freeform text)",
+        adventure="Adventure name (freeform text)",
+        number="Join an existing request by number from /wishlist browse",
         player="Another player to add for (admin only)",
     )
     async def wishlist_add(
         self,
         interaction: discord.Interaction,
-        adventure: str,
+        adventure: str | None = None,
+        number: int | None = None,
         player: discord.Member | None = None,
     ):
-        adventure = adventure.strip()
-        if not adventure:
-            await interaction.response.send_message("Please provide an adventure name.", ephemeral=True)
+        if adventure and number is not None:
+            await interaction.response.send_message(
+                "Provide either `adventure` or `number`, not both.",
+                ephemeral=True,
+            )
             return
+
+        if adventure is None and number is None:
+            embed = _wishlist_browse_embed()
+            if not embed:
+                await interaction.response.send_message(
+                    "No adventures on the wishlist yet. Use `/wishlist add adventure:...` to request one.",
+                    ephemeral=True,
+                )
+                return
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        if number is not None:
+            catalog = _wishlist_browse_catalog()
+            resolved = resolve_wishlist_number(catalog, number)
+            if not resolved:
+                await interaction.response.send_message(
+                    f"Invalid number. Use `/wishlist browse` to see options 1–{len(catalog)}.",
+                    ephemeral=True,
+                )
+                return
+            adventure = resolved
+        else:
+            adventure = adventure.strip()
+            if not adventure:
+                await interaction.response.send_message("Please provide an adventure name.", ephemeral=True)
+                return
 
         if player and player.id != interaction.user.id:
             if not interaction.user.guild_permissions.administrator:
@@ -350,8 +421,11 @@ class Sessions(commands.Cog):
     ):
         await interaction.response.defer(ephemeral=True)
 
-        resolved_adventure = adventure or self._derive_adventure_name()
-        participant_ids = db.get_latest_session_players()
+        rewards_session = db.get_rewards_session()
+        resolved_adventure = adventure or self._derive_adventure_name(rewards_session)
+        participant_ids = (
+            db.get_session_players(rewards_session["id"]) if rewards_session else []
+        )
 
         try:
             message_text = self._format_rewards_message(
