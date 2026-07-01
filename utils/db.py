@@ -463,8 +463,10 @@ def _warhorn_dt_to_db(value: str | datetime | None):
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def _warhorn_dt_to_iso(value) -> str:
+def _warhorn_dt_to_iso(value) -> str | None:
     dt = _warhorn_dt_to_db(value)
+    if dt is None:
+        return None
     return dt.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
 
 

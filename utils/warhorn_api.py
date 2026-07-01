@@ -167,7 +167,7 @@ class WarhornClient:
         variables = {"events": [event_slug]}
         if starts_after is not None:
             variables["startsAfter"] = starts_after.isoformat()
-        elif starts_before is None:
+        else:
             variables["startsAfter"] = datetime.now(timezone.utc).isoformat()
         if starts_before is not None:
             variables["startsBefore"] = starts_before.isoformat()
