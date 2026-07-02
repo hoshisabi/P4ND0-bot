@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse, urlunparse
 from zoneinfo import ZoneInfo
 
 import mysql.connector
@@ -326,27 +327,49 @@ def load_all_feeds() -> list:
 
 # --- RSS Seen ---
 
+def normalize_feed_url(feed_url: str) -> str:
+    return feed_url[:255]
+
+
+def normalize_entry_id(entry_id: str) -> str:
+    if not entry_id:
+        return ""
+    if "://" in entry_id:
+        parsed = urlparse(entry_id)
+        entry_id = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+    return entry_id[:255]
+
+
 def get_seen_ids(feed_url: str) -> set:
+    feed_key = normalize_feed_url(feed_url)
     conn = _connect()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT entry_id FROM rss_seen WHERE feed_url=%s", (feed_url[:255],))
+        cursor.execute("SELECT entry_id FROM rss_seen WHERE feed_url=%s", (feed_key,))
         rows = cursor.fetchall()
         cursor.close()
     finally:
         conn.close()
-    return {row[0] for row in rows}
+    return {normalize_entry_id(row[0]) for row in rows}
 
 
 def add_seen_ids(feed_url: str, entry_ids):
     if not entry_ids:
+        return
+    feed_key = normalize_feed_url(feed_url)
+    rows = [
+        (feed_key, normalize_entry_id(eid))
+        for eid in entry_ids
+        if normalize_entry_id(eid)
+    ]
+    if not rows:
         return
     conn = _connect()
     try:
         cursor = conn.cursor()
         cursor.executemany(
             "INSERT IGNORE INTO rss_seen (feed_url, entry_id) VALUES (%s, %s)",
-            [(feed_url[:255], eid[:255]) for eid in entry_ids],
+            rows,
         )
         conn.commit()
         cursor.close()
@@ -354,17 +377,33 @@ def add_seen_ids(feed_url: str, entry_ids):
         conn.close()
 
 
-def prune_seen(feed_url: str, max_count: int):
+def add_seen_id(feed_url: str, entry_id: str):
+    add_seen_ids(feed_url, [entry_id])
+
+
+def prune_seen(feed_url: str, max_count: int, keep_ids: set | None = None):
+    feed_key = normalize_feed_url(feed_url)
+    protected = {normalize_entry_id(eid) for eid in (keep_ids or set()) if normalize_entry_id(eid)}
     conn = _connect()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM rss_seen WHERE feed_url=%s", (feed_url[:255],))
+        cursor.execute("SELECT COUNT(*) FROM rss_seen WHERE feed_url=%s", (feed_key,))
         count = cursor.fetchone()[0]
-        if count > max_count:
-            cursor.execute(
-                "DELETE FROM rss_seen WHERE feed_url=%s ORDER BY seen_at ASC LIMIT %s",
-                (feed_url[:255], count - max_count),
-            )
+        excess = count - max_count
+        if excess > 0:
+            if protected:
+                placeholders = ", ".join(["%s"] * len(protected))
+                cursor.execute(
+                    f"""DELETE FROM rss_seen
+                        WHERE feed_url=%s AND entry_id NOT IN ({placeholders})
+                        ORDER BY seen_at ASC LIMIT %s""",
+                    (feed_key, *protected, excess),
+                )
+            else:
+                cursor.execute(
+                    "DELETE FROM rss_seen WHERE feed_url=%s ORDER BY seen_at ASC LIMIT %s",
+                    (feed_key, excess),
+                )
             conn.commit()
         cursor.close()
     finally:

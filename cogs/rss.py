@@ -21,7 +21,8 @@ class RSSFeed(commands.Cog):
         self.poll_feeds.cancel()
 
     def _entry_id(self, entry) -> str:
-        return entry.get("id") or entry.get("link") or entry.get("title", "")
+        raw = entry.get("id") or entry.get("link") or entry.get("title", "")
+        return db.normalize_entry_id(raw)
 
     def _strip_html(self, text: str) -> str:
         return re.sub(r"<[^>]+>", "", text).strip()
@@ -89,8 +90,8 @@ class RSSFeed(commands.Cog):
                 seen_ids = db.get_seen_ids(url)
                 is_first_run = len(seen_ids) == 0
 
-                current_ids = {self._entry_id(e) for e in entries}
-                new_entries = [e for e in entries if self._entry_id(e) not in seen_ids]
+                current_ids = {self._entry_id(e) for e in entries if self._entry_id(e)}
+                new_entries = [e for e in entries if self._entry_id(e) and self._entry_id(e) not in seen_ids]
 
                 if is_first_run:
                     db.add_seen_ids(url, current_ids)
@@ -98,7 +99,7 @@ class RSSFeed(commands.Cog):
                     continue
 
                 if not new_entries:
-                    print(f"[RSS] No new entries for {feed_name}.")
+                    print(f"[RSS] No new entries for {feed_name} ({len(seen_ids)} seen).")
                     continue
 
                 channel = self.bot.get_channel(channel_id)
@@ -111,17 +112,28 @@ class RSSFeed(commands.Cog):
 
                 posted_ids = []
                 for entry in reversed(new_entries):
+                    entry_id = self._entry_id(entry)
                     try:
                         embed = self._make_embed(entry, feed_name)
                         await channel.send(embed=embed)
-                        posted_ids.append(self._entry_id(entry))
+                        seen_ids.add(entry_id)
+                        posted_ids.append(entry_id)
+                        try:
+                            db.add_seen_id(url, entry_id)
+                        except Exception as e:
+                            print(f"[RSS] Failed to save seen entry for {feed_name} ({entry_id[:80]}): {e}")
                     except Exception as e:
                         print(f"[RSS] Error posting entry to {channel_id}: {e}")
 
                 if posted_ids:
-                    db.add_seen_ids(url, posted_ids)
-                    db.prune_seen(url, MAX_SEEN_PER_FEED)
-                print(f"[RSS] Posted {len(posted_ids)}/{len(new_entries)} new entry/entries for {feed_name}.")
+                    try:
+                        db.prune_seen(url, MAX_SEEN_PER_FEED, keep_ids=current_ids)
+                    except Exception as e:
+                        print(f"[RSS] Failed to prune seen entries for {feed_name}: {e}")
+                print(
+                    f"[RSS] Posted {len(posted_ids)}/{len(new_entries)} new entry/entries "
+                    f"for {feed_name} ({len(seen_ids)} seen)."
+                )
 
             except Exception as e:
                 print(f"[RSS] Unexpected error for feed {url}: {e}")
