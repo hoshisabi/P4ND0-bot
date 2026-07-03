@@ -87,21 +87,53 @@ function formatClasses(classEntries) {
   return classEntries.map((cls) => `${cls.name} ${cls.level ?? "?"}`).join(" / ");
 }
 
-function getDndBeyondUrl(actor) {
-  const flags = actor.flags?.["ddb-importer"] ?? actor.flags?.ddbImporter ?? {};
-  const ddb = flags.dndBeyond ?? flags.dndbeyond ?? {};
-  const characterId =
-    ddb.characterId ??
-    ddb.id ??
-    flags.characterId ??
-    flags.ddbCharacterId;
+const DDB_CHARACTER_ID_RE = /(?:dndbeyond\.com\/characters\/|\/characters\/)(\d+)/i;
 
-  if (characterId) {
-    return `https://www.dndbeyond.com/characters/${characterId}`;
+function extractDdbCharacterId(value) {
+  if (value == null || value === "") return null;
+  if (typeof value === "number") return String(value);
+
+  const text = String(value).trim();
+  const match = text.match(DDB_CHARACTER_ID_RE);
+  if (match) return match[1];
+  if (/^\d+$/.test(text)) return text;
+  return null;
+}
+
+function getDndBeyondUrl(actor) {
+  const flagSources = [
+    actor.flags?.["ddb-importer"],
+    actor.flags?.ddbimporter,
+    actor.flags?.ddbImporter,
+    actor.flags,
+  ].filter(Boolean);
+
+  for (const flags of flagSources) {
+    const ddb = flags.dndBeyond ?? flags.dndbeyond ?? flags;
+    const characterId = extractDdbCharacterId(
+      ddb.characterId ?? ddb.id ?? flags.characterId ?? flags.ddbCharacterId
+    );
+    if (characterId) {
+      return `https://www.dndbeyond.com/characters/${characterId}`;
+    }
+
+    for (const candidate of [ddb.url, ddb.characterUrl, flags.characterUrl, flags.url]) {
+      const fromUrl = extractDdbCharacterId(candidate);
+      if (fromUrl) return `https://www.dndbeyond.com/characters/${fromUrl}`;
+    }
   }
 
-  const url = ddb.url ?? ddb.characterUrl ?? flags.characterUrl;
-  return typeof url === "string" && url.trim() ? url.trim() : null;
+  for (const candidate of [
+    actor.img,
+    actor.prototypeToken?.texture?.src,
+    actor.system?.details?.biography?.value,
+    actor.system?.details?.biography,
+  ]) {
+    const fromUrl = extractDdbCharacterId(candidate);
+    if (fromUrl) return `https://www.dndbeyond.com/characters/${fromUrl}`;
+  }
+
+  return null;
 }
 
 function getAvatarUrl(actor) {

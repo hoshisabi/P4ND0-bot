@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import requests
 from dotenv import load_dotenv
 from datetime import datetime, timezone
@@ -120,6 +121,20 @@ def select_recent_past_sessions(nodes: list, *, limit: int = 8, now: datetime | 
     return recent
 
 
+_DMSGUILD_PRODUCT_RE = re.compile(r"(dmsguild\.com/(?:[a-z]{2}/)?product/\d+)(?:/[^?#]*)?", re.IGNORECASE)
+
+
+def shorten_dmsguild_url(url: str) -> str:
+    """Drop the descriptive slug from a DMsGuild product URL, keeping the ID and query.
+
+    e.g. https://www.dmsguild.com/en/product/450333/some-slug?affiliate_id=171040
+      -> https://www.dmsguild.com/en/product/450333?affiliate_id=171040
+    """
+    if not url:
+        return url
+    return _DMSGUILD_PRODUCT_RE.sub(r"\1", url)
+
+
 def format_obs_copy(session: dict) -> str:
     title = f"{OBS_TITLE_PREFIX}{session['name']}"
     lines = [
@@ -129,7 +144,7 @@ def format_obs_copy(session: dict) -> str:
     scenario = session.get("scenario") or {}
     external_url = scenario.get("externalUrl")
     if external_url:
-        lines.append(external_url)
+        lines.append(shorten_dmsguild_url(external_url))
     return "\n".join(lines)
 
 class WarhornClient:
