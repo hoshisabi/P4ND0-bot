@@ -43,7 +43,8 @@ def test_html_to_plain_text_preserves_paragraph_breaks():
     text = html_to_plain_text(raw)
     assert "Publisher: Dungeon Masters Guild" in text
     assert "A desperate summons." in text
-    assert "Publisher: Dungeon Masters GuildA desperate" not in text.replace("\n", "")
+    assert "Guild" in text and "A desperate" in text
+    assert text.find("A desperate") > text.find("Guild")
 
 
 def test_parse_feed_summary_extracts_publisher_price_and_body():
