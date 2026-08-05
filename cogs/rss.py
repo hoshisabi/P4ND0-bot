@@ -1,4 +1,3 @@
-import re
 import asyncio
 from datetime import datetime, timezone
 
@@ -7,9 +6,17 @@ from discord.ext import commands, tasks
 import feedparser
 
 from utils import db
+from utils.rss_format import build_entry_content
 
 POLL_INTERVAL_MINUTES = 60
 MAX_SEEN_PER_FEED = 500
+
+FEED_COLORS = {
+    "dmsguild": discord.Color.from_rgb(200, 16, 46),
+    "d&d beyond": discord.Color.from_rgb(90, 45, 130),
+    "warhorn": discord.Color.from_rgb(35, 110, 190),
+    "legends of greyhawk": discord.Color.from_rgb(34, 120, 70),
+}
 
 
 class RSSFeed(commands.Cog):
@@ -24,19 +31,16 @@ class RSSFeed(commands.Cog):
         raw = entry.get("id") or entry.get("link") or entry.get("title", "")
         return db.normalize_entry_id(raw)
 
-    def _strip_html(self, text: str) -> str:
-        return re.sub(r"<[^>]+>", "", text).strip()
+    def _feed_color(self, feed_name: str) -> discord.Color:
+        lowered = feed_name.casefold()
+        for key, color in FEED_COLORS.items():
+            if key in lowered:
+                return color
+        return discord.Color.orange()
 
     def _make_embed(self, entry, feed_name: str) -> discord.Embed:
-        title = (entry.get("title") or "No title")[:256]
+        content = build_entry_content(entry)
         link = entry.get("link", "")
-
-        summary = ""
-        raw = entry.get("summary") or ""
-        if raw:
-            summary = self._strip_html(raw)
-            if len(summary) > 300:
-                summary = summary[:297] + "..."
 
         published = entry.get("published_parsed") or entry.get("updated_parsed")
         timestamp = None
@@ -44,16 +48,20 @@ class RSSFeed(commands.Cog):
             timestamp = datetime(*published[:6], tzinfo=timezone.utc)
 
         embed = discord.Embed(
-            title=title,
-            color=discord.Color.orange(),
+            title=content["title"],
+            description=content["description"],
+            color=self._feed_color(feed_name),
             timestamp=timestamp,
         )
         if link:
             embed.url = link
-        if summary:
-            embed.description = summary
+        if content["author"]:
+            embed.set_author(name=content["author"])
+        if content["image_url"]:
+            embed.set_image(url=content["image_url"])
+        if content["price"]:
+            embed.add_field(name="Price", value=content["price"], inline=True)
         embed.set_footer(text=feed_name)
-
         return embed
 
     @tasks.loop(minutes=POLL_INTERVAL_MINUTES)
