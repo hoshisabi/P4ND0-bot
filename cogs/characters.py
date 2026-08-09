@@ -7,6 +7,7 @@ from discord.ext import commands
 from discord import app_commands
 
 from utils import db
+from utils.log import log
 
 DDB_CHARACTER_ID_RE = re.compile(r"characters/(\d+)")
 
@@ -14,11 +15,9 @@ DDB_CHARACTER_ID_RE = re.compile(r"characters/(\d+)")
 class Characters(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        timestamp = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
         self.characters = db.load_all_characters()
         if self.characters:
-            print(f"[{timestamp}] Characters loaded from database.")
+            log("Characters loaded from database.")
 
     char_group = app_commands.Group(name="character", description="Manage your D&D Beyond characters")
 
@@ -39,7 +38,7 @@ class Characters(commands.Cog):
 
     async def _fetch_character_from_ddb(self, character_id: str) -> tuple[str, str | None]:
         json_api_url = f"https://character-service.dndbeyond.com/character/v5/character/{character_id}"
-        print(f"Fetching character data from: {json_api_url}")
+        log(f"Fetching character data from: {json_api_url}")
         response = await asyncio.to_thread(requests.get, json_api_url, timeout=10)
         response.raise_for_status()
         char_data = response.json()
@@ -80,19 +79,19 @@ class Characters(commands.Cog):
                 )
             else:
                 await send(f"Could not fetch character data due to an HTTP error: {error}")
-            print(f"HTTPError fetching D&D Beyond character: {error}")
+            log(f"HTTPError fetching D&D Beyond character: {error}")
         elif isinstance(error, requests.exceptions.RequestException):
             await send(f"Could not fetch character data due to a network error: {error}")
-            print(f"Network error fetching D&D Beyond character: {error}")
+            log(f"Network error fetching D&D Beyond character: {error}")
         elif isinstance(error, json.JSONDecodeError):
             await send("Could not parse D&D Beyond character data. The response was not valid JSON.")
-            print("JSONDecodeError for D&D Beyond character data.")
+            log("JSONDecodeError for D&D Beyond character data.")
         elif isinstance(error, ValueError) and str(error) == "missing_data":
             await send("Could not retrieve character data from D&D Beyond. The character might be private or the ID is incorrect.")
-            print("D&D Beyond API response missing 'data' key.")
+            log("D&D Beyond API response missing 'data' key.")
         else:
             await send(f"An unexpected error occurred while fetching character data: {error}")
-            print(f"Unexpected error fetching D&D Beyond character: {error}")
+            log(f"Unexpected error fetching D&D Beyond character: {error}")
 
     @char_group.command(name="add", description="Add or update a D&D Beyond character to a player's profile")
     @app_commands.describe(
@@ -144,7 +143,7 @@ class Characters(commands.Cog):
             embed.set_footer(text=footer)
 
             await interaction.followup.send(embed=embed, ephemeral=True)
-            print(f"User {interaction.user.id} added/updated character for {target.id}: {character_name} ({clean_url})")
+            log(f"User {interaction.user.id} added/updated character for {target.id}: {character_name} ({clean_url})")
         except Exception as e:
             await self._handle_ddb_fetch_error(
                 lambda msg: interaction.followup.send(msg, ephemeral=True), e
@@ -178,7 +177,7 @@ class Characters(commands.Cog):
             embed.set_footer(text=f"Detected from {message.author.display_name}'s message")
 
             await message.reply(embed=embed, mention_author=False)
-            print(f"Auto-detected character for user {user_id}: {character_name} ({clean_url})")
+            log(f"Auto-detected character for user {user_id}: {character_name} ({clean_url})")
         except Exception as e:
             await self._handle_ddb_fetch_error(
                 lambda msg: message.reply(msg, mention_author=False), e
@@ -333,7 +332,7 @@ class Characters(commands.Cog):
                     assigned_by_other=assigned_by_other,
                 )
                 await interaction.followup.send(embed=embed, ephemeral=True)
-                print(f"User {interaction.user.id} set character for {target.id}: {character_name} ({clean_url})")
+                log(f"User {interaction.user.id} set character for {target.id}: {character_name} ({clean_url})")
             except Exception as e:
                 await self._handle_ddb_fetch_error(
                     lambda msg: interaction.followup.send(msg, ephemeral=True), e

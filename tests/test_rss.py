@@ -1,6 +1,7 @@
 from utils import db
 from utils.rss_format import (
     build_entry_content,
+    extract_image_url,
     html_to_plain_text,
     parse_feed_summary,
 )
@@ -14,6 +15,44 @@ def test_normalize_entry_id_strips_url_query_params():
     assert db.normalize_entry_id(raw) == (
         "https://www.dmsguild.com/product/573916/FRDCHEARTHOME03-Playing-With-Power"
     )
+
+
+def test_normalize_entry_id_strips_en_prefix():
+    raw = "https://www.dmsguild.com/en/product/579088/Blackgate-Blues"
+    assert db.normalize_entry_id(raw) == (
+        "https://www.dmsguild.com/product/579088/Blackgate-Blues"
+    )
+
+
+def test_stable_entry_id_uses_link_when_id_is_site_root():
+    entry = {
+        "id": "https://www.legendsofgreyhawk.com/",
+        "link": "https://www.legendsofgreyhawk.com/arcana-unleashed-trading/",
+        "title": "Arcana Unleashed & Trading",
+    }
+    assert db.stable_entry_id(entry) == (
+        "https://www.legendsofgreyhawk.com/arcana-unleashed-trading/"
+    )
+
+
+def test_stable_entry_id_prefers_product_id_for_dmsguild():
+    entry = {
+        "id": "https://www.dmsguild.com/product/579088/Blackgate-Blues-FRDCBIRD0101",
+        "link": "https://www.dmsguild.com/en/product/579088/Blackgate-Blues?affiliate_id=171040",
+        "title": "Blackgate Blues",
+    }
+    assert db.stable_entry_id(entry) == (
+        "https://www.dmsguild.com/product/579088/Blackgate-Blues-FRDCBIRD0101"
+    )
+
+
+def test_stable_entry_id_uses_numeric_id_for_dndbeyond():
+    entry = {
+        "id": "2215",
+        "link": "http://www.dndbeyond.com/posts/2215-d-d-vision-keynote-recap",
+        "title": "D&D Vision Keynote Recap",
+    }
+    assert db.stable_entry_id(entry) == "2215"
 
 
 def test_normalize_entry_id_keeps_non_url_ids():
@@ -81,3 +120,7 @@ def test_build_entry_content_from_dmsguild_like_entry():
     assert content["price"] == "$2.99"
     assert "Red Wizards of Thay" in content["description"]
     assert content["image_url"] == "https://www.dmsguild.com/image/cache/w900h900/data/cover.jpg"
+
+
+def test_extract_image_url_ignores_bare_filenames():
+    assert extract_image_url('<img src="551620-thumb140.jpg">') is None

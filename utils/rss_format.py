@@ -90,9 +90,9 @@ def extract_image_url(raw_html: str, *, base_url: str = DMGUILD_BASE) -> str | N
         return f"https:{src}"
     if src.startswith("/"):
         return urljoin(base_url, src)
-    if not src.startswith("http"):
-        return urljoin(f"{DMGUILD_BASE}image/cache/", src)
-    return src
+    if src.startswith("http"):
+        return src
+    return None
 
 
 def entry_image_url(entry: dict[str, Any]) -> str | None:

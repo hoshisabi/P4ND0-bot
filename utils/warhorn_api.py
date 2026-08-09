@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from utils.log import log
+
 load_dotenv()
 
 WARHORN_APPLICATION_TOKEN = os.getenv("WARHORN_APPLICATION_TOKEN")
@@ -163,14 +165,14 @@ class WarhornClient:
             payload["variables"] = variables
 
         response = requests.post(self.api_endpoint, headers=headers, data=json.dumps(payload))
-        print(f"Warhorn API response status: {response.status_code}")
-        print(f"Warhorn API raw response: {response.text}")
+        log(f"Warhorn API response status: {response.status_code}")
+        log(f"Warhorn API raw response: {response.text}")
         response.raise_for_status()
         try:
             return response.json()
         except json.JSONDecodeError as e:
-            print(f"JSON decoding error: {e}")
-            print(f"Response content: {response.text}")
+            log(f"JSON decoding error: {e}")
+            log(f"Response content: {response.text}")
             raise
 
     def get_event_sessions(

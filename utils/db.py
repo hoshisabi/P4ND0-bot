@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo
 
 import mysql.connector
 
+from utils.log import log
+
 EASTERN = ZoneInfo("America/New_York")
 
 
@@ -172,9 +174,9 @@ def _migrate_characters():
         finally:
             conn.close()
         os.rename("characters.json", "characters.json.migrated")
-        print("[DB] Migrated characters.json to database.")
+        log("[DB] Migrated characters.json to database.")
     except Exception as e:
-        print(f"[DB] Error migrating characters.json: {e}")
+        log(f"[DB] Error migrating characters.json: {e}")
 
 
 def _migrate_feeds():
@@ -196,9 +198,9 @@ def _migrate_feeds():
         finally:
             conn.close()
         os.rename("feeds.json", "feeds.json.migrated")
-        print("[DB] Migrated feeds.json to database.")
+        log("[DB] Migrated feeds.json to database.")
     except Exception as e:
-        print(f"[DB] Error migrating feeds.json: {e}")
+        log(f"[DB] Error migrating feeds.json: {e}")
 
 
 def _migrate_rss_seen():
@@ -221,9 +223,9 @@ def _migrate_rss_seen():
         finally:
             conn.close()
         os.rename("rss_seen.json", "rss_seen.json.migrated")
-        print("[DB] Migrated rss_seen.json to database.")
+        log("[DB] Migrated rss_seen.json to database.")
     except Exception as e:
-        print(f"[DB] Error migrating rss_seen.json: {e}")
+        log(f"[DB] Error migrating rss_seen.json: {e}")
 
 
 def _migrate_watched_schedules():
@@ -245,9 +247,9 @@ def _migrate_watched_schedules():
         finally:
             conn.close()
         os.rename("watched_schedules.json", "watched_schedules.json.migrated")
-        print("[DB] Migrated watched_schedules.json to database.")
+        log("[DB] Migrated watched_schedules.json to database.")
     except Exception as e:
-        print(f"[DB] Error migrating watched_schedules.json: {e}")
+        log(f"[DB] Error migrating watched_schedules.json: {e}")
 
 
 def _migrate_last_warhorn_sessions():
@@ -269,9 +271,9 @@ def _migrate_last_warhorn_sessions():
         finally:
             conn.close()
         os.rename("last_warhorn_sessions.json", "last_warhorn_sessions.json.migrated")
-        print("[DB] Migrated last_warhorn_sessions.json to database.")
+        log("[DB] Migrated last_warhorn_sessions.json to database.")
     except Exception as e:
-        print(f"[DB] Error migrating last_warhorn_sessions.json: {e}")
+        log(f"[DB] Error migrating last_warhorn_sessions.json: {e}")
 
 
 # --- Characters ---
@@ -336,8 +338,30 @@ def normalize_entry_id(entry_id: str) -> str:
         return ""
     if "://" in entry_id:
         parsed = urlparse(entry_id)
-        entry_id = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+        path = parsed.path
+        if path.startswith("/en/"):
+            path = path[3:]
+        entry_id = urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
     return entry_id[:255]
+
+
+def stable_entry_id(entry: dict) -> str:
+    """Return a stable dedup key for a feed entry.
+
+    Some feeds (notably WordPress) set every entry's id to the site homepage URL.
+    Prefer the entry link when the id is just the site root.
+    """
+    entry_id = (entry.get("id") or "").strip()
+    link = (entry.get("link") or "").strip()
+
+    if link and entry_id and "://" in entry_id:
+        norm_id = normalize_entry_id(entry_id).rstrip("/")
+        site_root = "/".join(link.split("/")[:3]).rstrip("/")
+        if norm_id.lower() == site_root.lower():
+            return normalize_entry_id(link)
+
+    raw = entry_id or link or entry.get("title", "")
+    return normalize_entry_id(raw)
 
 
 def get_seen_ids(feed_url: str) -> set:

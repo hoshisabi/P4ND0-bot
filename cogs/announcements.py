@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands, tasks
 
 from utils import db
+from utils.log import log
 from utils.warhorn_api import WarhornClient, parse_warhorn_dt
 
 EASTERN = ZoneInfo("America/New_York")
@@ -47,7 +48,7 @@ class Announcements(commands.Cog):
             nodes = result.get("data", {}).get("eventSessions", {}).get("nodes", [])
             db.record_warhorn_sessions(nodes)
         except Exception as e:
-            print(f"[Announcements] Failed to fetch Warhorn sessions: {e}")
+            log(f"[Announcements] Failed to fetch Warhorn sessions: {e}")
             return
 
         channel = self.bot.get_channel(DAN_TEXT_CHANNEL_ID)
@@ -55,7 +56,7 @@ class Announcements(commands.Cog):
             try:
                 channel = await self.bot.fetch_channel(DAN_TEXT_CHANNEL_ID)
             except Exception as e:
-                print(f"[Announcements] Could not fetch channel {DAN_TEXT_CHANNEL_ID}: {e}")
+                log(f"[Announcements] Could not fetch channel {DAN_TEXT_CHANNEL_ID}: {e}")
                 return
 
         today_session = next(
@@ -85,7 +86,7 @@ class Announcements(commands.Cog):
         await channel.send(embed=embed)
 
         db.mark_announcement_fired(sentinel, "day_of_noon")
-        print(f"[Announcements] Fired day_of_noon for {sentinel}")
+        log(f"[Announcements] Fired day_of_noon for {sentinel}")
 
     async def _check_session_reminders(self, now, channel, session):
         starts_at = parse_warhorn_dt(session["startsAt"]).astimezone(EASTERN)
@@ -104,7 +105,7 @@ class Announcements(commands.Cog):
                 if not db.has_announcement_fired(session_id, ann_type):
                     await channel.send(message)
                     db.mark_announcement_fired(session_id, ann_type)
-                    print(f"[Announcements] Fired {ann_type} for {session_id}")
+                    log(f"[Announcements] Fired {ann_type} for {session_id}")
 
     def _session_embed(self, session, title_prefix="Session"):
         name = session["name"]
@@ -155,7 +156,7 @@ class Announcements(commands.Cog):
                 None,
             )
         except Exception as e:
-            print(f"[Announcements] /announce Warhorn fetch failed: {e}")
+            log(f"[Announcements] /announce Warhorn fetch failed: {e}")
 
         channel = self.bot.get_channel(DAN_TEXT_CHANNEL_ID)
         if not channel:
@@ -178,7 +179,7 @@ class Announcements(commands.Cog):
     @check_announcements.before_loop
     async def before_check_announcements(self):
         await self.bot.wait_until_ready()
-        print("[Announcements] Loop ready.")
+        log("[Announcements] Loop ready.")
 
 
 async def setup(bot):

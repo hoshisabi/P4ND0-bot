@@ -5,6 +5,7 @@ from discord.ext import commands
 from discord import app_commands
 
 from utils import db
+from utils.log import log
 from utils.session_format import build_gotime_embed
 from utils.warhorn_api import (
     WarhornClient,
@@ -88,7 +89,7 @@ class Sessions(commands.Cog):
             result = self.warhorn_client.get_sessions_for_gotime(WARHORN_SLUG)
             nodes = result.get("data", {}).get("eventSessions", {}).get("nodes", [])
         except Exception as e:
-            print(f"[Sessions] Warhorn fetch failed: {e}")
+            log(f"[Sessions] Warhorn fetch failed: {e}")
             return None
 
         if not nodes:
@@ -178,7 +179,7 @@ class Sessions(commands.Cog):
         if not preview:
             cleared = db.clear_stale_session_selections()
             if cleared:
-                print(f"[Sessions] Cleared {cleared} stale character selection(s) from prior sessions.")
+                log(f"[Sessions] Cleared {cleared} stale character selection(s) from prior sessions.")
 
         session, error = self._fetch_current_warhorn_session()
         if error:

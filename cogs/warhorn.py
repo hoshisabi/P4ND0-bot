@@ -9,20 +9,19 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 from utils import db
+from utils.log import log
 from utils.warhorn_api import WarhornClient
 
 class Warhorn(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        timestamp = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
         self.watched_schedules = db.load_all_watched_schedules()
         if self.watched_schedules:
-            print(f"[{timestamp}] Watched schedules loaded from database (IDs only, messages will be fetched).")
+            log("Watched schedules loaded from database (IDs only, messages will be fetched).")
 
         self.last_warhorn_sessions_data = db.load_all_last_sessions()
         if self.last_warhorn_sessions_data:
-            print(f"[{timestamp}] Last Warhorn sessions data loaded from database.")
+            log("Last Warhorn sessions data loaded from database.")
 
         self.global_sessions_json = None
 
@@ -57,8 +56,6 @@ class Warhorn(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         channels_to_remove = []
-        current_time = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
         for channel_id, data_or_message in list(self.watched_schedules.items()):
             if isinstance(data_or_message, discord.Message):
                 continue 
@@ -74,18 +71,18 @@ class Warhorn(commands.Cog):
                     message = await channel.fetch_message(message_id)
                     self.watched_schedules[channel_id] = message
                     chan_label = self._chan_label(channel)
-                    print(f"[{current_time}] Successfully fetched watched message {message_id} in {chan_label} ({channel_id}).")
+                    log(f"Successfully fetched watched message {message_id} in {chan_label} ({channel_id}).")
                 else:
-                    print(f"[{current_time}] Channel {channel_id} not found for watched message {message_id}. Removing from watch list.")
+                    log(f"Channel {channel_id} not found for watched message {message_id}. Removing from watch list.")
                     channels_to_remove.append(channel_id)
             except discord.NotFound:
-                print(f"[{current_time}] Message {message_id} not found in channel {channel_id}. It might have been deleted. Removing from watch list.")
+                log(f"Message {message_id} not found in channel {channel_id}. It might have been deleted. Removing from watch list.")
                 channels_to_remove.append(channel_id)
             except discord.Forbidden:
-                print(f"[{current_time}] Bot does not have permission to access channel {channel_id} or message {message_id}. Removing from watch list.")
+                log(f"Bot does not have permission to access channel {channel_id} or message {message_id}. Removing from watch list.")
                 channels_to_remove.append(channel_id)
             except Exception as e:
-                print(f"[{current_time}] An error occurred while fetching watched message {message_id} in channel {channel_id}: {e}. Removing.")
+                log(f"An error occurred while fetching watched message {message_id} in channel {channel_id}: {e}. Removing.")
                 channels_to_remove.append(channel_id)
 
         for ch_id in channels_to_remove:
@@ -103,7 +100,7 @@ class Warhorn(commands.Cog):
             initial_result = self.warhorn_client.get_event_sessions(pandodnd_slug)
 
             if "data" not in initial_result or "eventSessions" not in initial_result["data"] or "nodes" not in initial_result["data"]["eventSessions"]:
-                print("Unexpected Warhorn API response structure or no data from initial fetch.")
+                log("Unexpected Warhorn API response structure or no data from initial fetch.")
                 return discord.Embed(title="Schedule Error", description="Could not retrieve schedule from Warhorn. Please try again later.", color=discord.Color.red()), []
 
             sessions_to_display = sorted(
@@ -188,10 +185,10 @@ class Warhorn(commands.Cog):
             return embed, sessions_to_display 
 
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching Warhorn schedule: {e}")
+            log(f"Error fetching Warhorn schedule: {e}")
             return discord.Embed(title="Schedule Error", description=f"Could not retrieve schedule from Warhorn due to a network error: {e}", color=discord.Color.red()), []
         except Exception as e:
-            print(f"An unexpected error occurred in get_warhorn_embed_and_data: {e}")
+            log(f"An unexpected error occurred in get_warhorn_embed_and_data: {e}")
             return discord.Embed(title="Schedule Error", description=f"An unexpected error occurred while fetching schedule: {e}", color=discord.Color.red()), []
 
     @app_commands.command(name="schedule", description="Pulls the most recent schedule of upcoming events from Warhorn displayed in your local time.")
@@ -222,13 +219,13 @@ class Warhorn(commands.Cog):
         if old_message_object and isinstance(old_message_object, discord.Message):
             try:
                 await old_message_object.delete()
-                print(f"Deleted old schedule message {old_message_object.id} in {self._chan_label(interaction.channel)} before setting new watch.")
+                log(f"Deleted old schedule message {old_message_object.id} in {self._chan_label(interaction.channel)} before setting new watch.")
             except discord.NotFound:
                 pass
             except discord.Forbidden:
                 await interaction.followup.send("Warning: I couldn't delete the previous schedule message. Please ensure I have 'Manage Messages' permission.")
             except Exception as e:
-                print(f"Error handling old message {old_message_object.id}: {e}")
+                log(f"Error handling old message {old_message_object.id}: {e}")
 
         # Send actual watched schedule to the channel text directly
         try:
@@ -247,7 +244,7 @@ class Warhorn(commands.Cog):
         db.save_watched_schedule(channel_id, message.id)
         db.save_last_sessions(channel_id, sessions_data)
 
-        print(f"Set to watch {self._chan_label(interaction.channel)} ({channel_id}) with message ID {message.id}.")
+        log(f"Set to watch {self._chan_label(interaction.channel)} ({channel_id}) with message ID {message.id}.")
         await interaction.followup.send(f"This channel is now being watched for Warhorn schedule updates. I will keep the schedule at the bottom of the channel.", ephemeral=True)
 
     @app_commands.command(name="unwatch", description="Stops watching this channel for Warhorn schedule updates.")
@@ -276,21 +273,21 @@ class Warhorn(commands.Cog):
     @tasks.loop(minutes=10)
     async def update_warhorn_schedule(self):
         if not self.bot.is_ready() or not self.watched_schedules:
-            print("Scheduled update skipped: Bot not ready or no channels watched.")
+            log("Scheduled update skipped: Bot not ready or no channels watched.")
             return
 
-        print("Running scheduled Warhorn schedule update check...")
+        log("Running scheduled Warhorn schedule update check...")
         new_embed, new_sessions_data = await self.get_warhorn_embed_and_data(False) 
 
         if new_embed.color == discord.Color.red():
-            print("Scheduled update: Error fetching new Warhorn data. Skipping update for all channels.")
+            log("Scheduled update: Error fetching new Warhorn data. Skipping update for all channels.")
             return
 
         try:
             new_sessions_json = json.dumps(new_sessions_data, sort_keys=True, default=str)
             new_embed_sig = json.dumps(new_embed.to_dict(), sort_keys=True, default=str)
         except Exception as e:
-            print(f"Error serializing new embed/sessions for comparison: {e}")
+            log(f"Error serializing new embed/sessions for comparison: {e}")
             return
 
         if self.global_sessions_json is None:
@@ -313,7 +310,7 @@ class Warhorn(commands.Cog):
                     async for m in channel.history(limit=1):
                         last_message = m
                     if last_message and last_message.id != message_object.id:
-                        print(f"Schedule is not the last message in {chan_label}. Reposting at the bottom...")
+                        log(f"Schedule is not the last message in {chan_label}. Reposting at the bottom...")
                         try:
                             await message_object.delete()
                         except:
@@ -324,10 +321,10 @@ class Warhorn(commands.Cog):
                         self.last_warhorn_sessions_data[channel_id] = new_sessions_data
                         db.save_watched_schedule(channel_id, new_msg.id)
                         db.save_last_sessions(channel_id, new_sessions_data)
-                        print(f"Reposted schedule as message {new_msg.id} in {chan_label}.")
+                        log(f"Reposted schedule as message {new_msg.id} in {chan_label}.")
                         continue
                 except Exception as e:
-                    print(f"Error while ensuring bottom message in {chan_label}: {e}")
+                    log(f"Error while ensuring bottom message in {chan_label}: {e}")
 
                 try:
                     last_sessions_json = json.dumps(
@@ -343,29 +340,29 @@ class Warhorn(commands.Cog):
                     if message_object.embeds:
                         current_embed_sig = json.dumps(message_object.embeds[0].to_dict(), sort_keys=True, default=str)
                 except Exception as e:
-                    print(f"Error reading current embed for message {message_object.id} in {chan_label}: {e}")
+                    log(f"Error reading current embed for message {message_object.id} in {chan_label}: {e}")
 
                 sessions_changed = (new_sessions_json != last_sessions_json)
                 embed_changed = (current_embed_sig != new_embed_sig)
 
                 if sessions_changed or embed_changed:
-                    print(f"Updating schedule message in {chan_label}")
+                    log(f"Updating schedule message in {chan_label}")
                     try:
                         await message_object.edit(embed=new_embed)
                         self.last_warhorn_sessions_data[channel_id] = new_sessions_data
                         db.save_last_sessions(channel_id, new_sessions_data)
-                        print(f"Edited schedule message {message_object.id} in {chan_label}.")
+                        log(f"Edited schedule message {message_object.id} in {chan_label}.")
                     except discord.NotFound:
                         channels_to_remove.append(channel_id)
                     except discord.Forbidden:
                         channels_to_remove.append(channel_id)
                     except Exception as e:
-                        print(f"Error editing schedule message in {chan_label}: {e}")
+                        log(f"Error editing schedule message in {chan_label}: {e}")
                 else:
-                    print(f"Warhorn schedule for {chan_label} is unchanged (sessions and embed).")
+                    log(f"Warhorn schedule for {chan_label} is unchanged (sessions and embed).")
 
             except Exception as e:
-                print(f"Unexpected error handling channel {channel_id}: {e}")
+                log(f"Unexpected error handling channel {channel_id}: {e}")
 
         for ch_id in channels_to_remove:
             if ch_id in self.watched_schedules:
@@ -378,9 +375,9 @@ class Warhorn(commands.Cog):
     @update_warhorn_schedule.before_loop
     async def before_update_warhorn_schedule(self):
         await self.bot.wait_until_ready()
-        print("Warhorn schedule update loop ready to start.")
+        log("Warhorn schedule update loop ready to start.")
         await asyncio.sleep(5)
-        print("Finished initial delay for cache.")
+        log("Finished initial delay for cache.")
 
     async def _notify_subscribers(self, sessions_data: list):
         subscriber_ids = db.get_all_subscribers()
@@ -411,10 +408,10 @@ class Warhorn(commands.Cog):
                 await user.send(embed=embed)
                 sent += 1
             except discord.Forbidden:
-                print(f"[Warhorn] Could not DM subscriber {user_id} — DMs may be disabled.")
+                log(f"[Warhorn] Could not DM subscriber {user_id} — DMs may be disabled.")
             except Exception as e:
-                print(f"[Warhorn] Error notifying subscriber {user_id}: {e}")
-        print(f"[Warhorn] Notified {sent}/{len(subscriber_ids)} subscriber(s) of schedule change.")
+                log(f"[Warhorn] Error notifying subscriber {user_id}: {e}")
+        log(f"[Warhorn] Notified {sent}/{len(subscriber_ids)} subscriber(s) of schedule change.")
 
     @app_commands.command(name="notify", description="Toggle DM notifications when the Warhorn schedule changes.")
     async def notify(self, interaction: discord.Interaction):

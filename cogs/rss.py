@@ -6,6 +6,7 @@ from discord.ext import commands, tasks
 import feedparser
 
 from utils import db
+from utils.log import log
 from utils.rss_format import build_entry_content
 
 POLL_INTERVAL_MINUTES = 60
@@ -28,8 +29,7 @@ class RSSFeed(commands.Cog):
         self.poll_feeds.cancel()
 
     def _entry_id(self, entry) -> str:
-        raw = entry.get("id") or entry.get("link") or entry.get("title", "")
-        return db.normalize_entry_id(raw)
+        return db.stable_entry_id(entry)
 
     def _feed_color(self, feed_name: str) -> discord.Color:
         lowered = feed_name.casefold()
@@ -62,7 +62,19 @@ class RSSFeed(commands.Cog):
         if content["price"]:
             embed.add_field(name="Price", value=content["price"], inline=True)
         embed.set_footer(text=feed_name)
-        return embed
+        return embed, content["image_url"]
+
+    async def _send_entry(self, channel, entry, feed_name: str):
+        embed, image_url = self._make_embed(entry, feed_name)
+        try:
+            await channel.send(embed=embed)
+            return
+        except Exception as e:
+            if not image_url:
+                raise
+            log(f"[RSS] Embed send failed for {feed_name} (retrying without image): {e}")
+            embed.set_image(url=None)
+            await channel.send(embed=embed)
 
     @tasks.loop(minutes=POLL_INTERVAL_MINUTES)
     async def poll_feeds(self):
@@ -73,8 +85,7 @@ class RSSFeed(commands.Cog):
         if not feeds:
             return
 
-        ts = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{ts}] [RSS] Polling {len(feeds)} feed(s)...")
+        log(f"[RSS] Polling {len(feeds)} feed(s)...")
 
         loop = asyncio.get_event_loop()
 
@@ -84,14 +95,14 @@ class RSSFeed(commands.Cog):
             feed_name = feed_config.get("name", url)
 
             if not url or not channel_id:
-                print(f"[RSS] Skipping invalid feed config: {feed_config}")
+                log(f"[RSS] Skipping invalid feed config: {feed_config}")
                 continue
 
             try:
                 parsed = await loop.run_in_executor(None, feedparser.parse, url)
 
                 if parsed.bozo and not parsed.entries:
-                    print(f"[RSS] Failed to parse {feed_name}: {parsed.bozo_exception}")
+                    log(f"[RSS] Failed to parse {feed_name}: {parsed.bozo_exception}")
                     continue
 
                 entries = parsed.entries
@@ -103,11 +114,21 @@ class RSSFeed(commands.Cog):
 
                 if is_first_run:
                     db.add_seen_ids(url, current_ids)
-                    print(f"[RSS] First run for {feed_name}: marked {len(current_ids)} existing entries as seen.")
+                    log(f"[RSS] First run for {feed_name}: marked {len(current_ids)} existing entries as seen.")
                     continue
 
                 if not new_entries:
-                    print(f"[RSS] No new entries for {feed_name} ({len(seen_ids)} seen).")
+                    newest = entries[0] if entries else None
+                    if newest:
+                        newest_id = self._entry_id(newest)
+                        newest_title = (newest.get("title") or "")[:60]
+                        log(
+                            f"[RSS] No new entries for {feed_name} ({len(seen_ids)} seen, "
+                            f"{len(entries)} in feed). Newest: {newest_title!r} "
+                            f"(seen={newest_id in seen_ids})"
+                        )
+                    else:
+                        log(f"[RSS] No new entries for {feed_name} ({len(seen_ids)} seen).")
                     continue
 
                 channel = self.bot.get_channel(channel_id)
@@ -115,41 +136,40 @@ class RSSFeed(commands.Cog):
                     try:
                         channel = await self.bot.fetch_channel(channel_id)
                     except Exception as e:
-                        print(f"[RSS] Could not find channel {channel_id}: {e}")
+                        log(f"[RSS] Could not find channel {channel_id}: {e}")
                         continue
 
                 posted_ids = []
                 for entry in reversed(new_entries):
                     entry_id = self._entry_id(entry)
                     try:
-                        embed = self._make_embed(entry, feed_name)
-                        await channel.send(embed=embed)
+                        await self._send_entry(channel, entry, feed_name)
                         seen_ids.add(entry_id)
                         posted_ids.append(entry_id)
                         try:
                             db.add_seen_id(url, entry_id)
                         except Exception as e:
-                            print(f"[RSS] Failed to save seen entry for {feed_name} ({entry_id[:80]}): {e}")
+                            log(f"[RSS] Failed to save seen entry for {feed_name} ({entry_id[:80]}): {e}")
                     except Exception as e:
-                        print(f"[RSS] Error posting entry to {channel_id}: {e}")
+                        log(f"[RSS] Error posting entry to {channel_id}: {e}")
 
                 if posted_ids:
                     try:
                         db.prune_seen(url, MAX_SEEN_PER_FEED, keep_ids=current_ids)
                     except Exception as e:
-                        print(f"[RSS] Failed to prune seen entries for {feed_name}: {e}")
-                print(
+                        log(f"[RSS] Failed to prune seen entries for {feed_name}: {e}")
+                log(
                     f"[RSS] Posted {len(posted_ids)}/{len(new_entries)} new entry/entries "
                     f"for {feed_name} ({len(seen_ids)} seen)."
                 )
 
             except Exception as e:
-                print(f"[RSS] Unexpected error for feed {url}: {e}")
+                log(f"[RSS] Unexpected error for feed {url}: {e}")
 
     @poll_feeds.before_loop
     async def before_poll_feeds(self):
         await self.bot.wait_until_ready()
-        print("[RSS] Feed polling loop ready.")
+        log("[RSS] Feed polling loop ready.")
 
 
 async def setup(bot):

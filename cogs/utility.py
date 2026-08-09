@@ -5,6 +5,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
+from utils.log import log
+
 class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -106,7 +108,7 @@ class Utility(commands.Cog):
             embed.set_author(name="zenquotes.io", url="https://zenquotes.io/")
             await interaction.followup.send(embed=embed)
         except Exception as e:
-            print(f"Error fetching quote: {e}")
+            log(f"Error fetching quote: {e}")
             await interaction.followup.send("Sorry, I couldn't fetch a quote right now.")
 
     @app_commands.command(name="roll", description="Rolls a dice in NdN format (e.g., 2d6)")
@@ -152,7 +154,7 @@ class Utility(commands.Cog):
             f"and {len(global_synced)} globally (up to 1 hour).",
             delete_after=15,
         )
-        print(f"[Sync] Manual sync triggered by {ctx.author}: {len(guild_synced)} guild, {len(global_synced)} global.")
+        log(f"[Sync] Manual sync triggered by {ctx.author}: {len(guild_synced)} guild, {len(global_synced)} global.")
 
 
 async def setup(bot):

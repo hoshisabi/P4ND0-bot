@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 from utils import db
+from utils.log import log
 
 load_dotenv()
 
@@ -26,30 +27,29 @@ class P4ND0Bot(commands.Bot):
             db.init_schema()
             db.migrate_from_json()
             db.seed_warhorn_sessions_from_cache()
-            print("Database ready.")
+            log("Database ready.")
         except Exception as e:
-            print(f"Database initialization failed: {e}")
+            log(f"Database initialization failed: {e}")
 
         # Load cogs
         cogs = ['cogs.utility', 'cogs.characters', 'cogs.warhorn', 'cogs.rss', 'cogs.sessions', 'cogs.announcements']
         for cog in cogs:
             try:
                 await self.load_extension(cog)
-                print(f"Loaded extension: {cog}")
+                log(f"Loaded extension: {cog}")
             except Exception as e:
-                print(f"Failed to load extension {cog}: {e}")
+                log(f"Failed to load extension {cog}: {e}")
         
         # Sync application slash commands globally
         try:
             synced = await self.tree.sync()
-            print(f"Synced {len(synced)} slash commands")
+            log(f"Synced {len(synced)} slash commands")
         except Exception as e:
-            print(f"Failed to sync slash commands: {e}")
+            log(f"Failed to sync slash commands: {e}")
 
     async def on_ready(self):
-        current_time = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        print(f'[{current_time}] Logged in as {self.user} (ID: {self.user.id})')
-        print('------')
+        log(f"Logged in as {self.user} (ID: {self.user.id})")
+        log("------")
 
 bot = P4ND0Bot()
 
