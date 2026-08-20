@@ -7,6 +7,9 @@ from utils.wishlist_format import (
     build_browse_catalog,
     build_wishlist_catalog,
     format_browse_catalog,
+    format_trim_result,
+    match_wishlist_adventure,
+    plan_wishlist_trim,
     resolve_wishlist_number,
 )
 
@@ -90,6 +93,140 @@ def test_resolve_wishlist_number_returns_adventure_name():
     assert resolve_wishlist_number(catalog, 2) == "Dragon of Icespire Peak"
     assert resolve_wishlist_number(catalog, 0) is None
     assert resolve_wishlist_number(catalog, 3) is None
+
+
+def test_match_wishlist_adventure_exact_and_session_title():
+    catalog = build_wishlist_catalog([
+        _entry("Absent without Leave", "Alice"),
+        _entry("Dragon of Icespire Peak", "Bob"),
+    ])
+
+    assert match_wishlist_adventure(catalog, "Absent without Leave") == "Absent without Leave"
+    assert match_wishlist_adventure(catalog, "absent without leave") == "Absent without Leave"
+    assert match_wishlist_adventure(catalog, "PS-DC-PUB-10 Absent without Leave") == "Absent without Leave"
+    assert match_wishlist_adventure(catalog, "Unknown") is None
+    assert match_wishlist_adventure(catalog, "") is None
+
+
+def test_match_wishlist_adventure_ambiguous_containment_returns_none():
+    catalog = build_wishlist_catalog([
+        _entry("Leave", "Alice"),
+        _entry("Absent without Leave", "Bob"),
+    ])
+
+    assert match_wishlist_adventure(catalog, "PS Absent without Leave") is None
+    assert match_wishlist_adventure(catalog, "Leave") == "Leave"
+
+
+def test_format_trim_result_clears_whole_adventure():
+    removed = [
+        {"display_name": "Alice", "discord_user_id": 1},
+        {"display_name": "Bob", "discord_user_id": 2},
+    ]
+
+    assert format_trim_result("Absent without Leave", removed) == (
+        "Trimmed **Absent without Leave** from the wishlist (Alice, Bob)."
+    )
+    assert format_trim_result("Absent without Leave", []) == (
+        "Nobody has wishlisted **Absent without Leave**."
+    )
+
+
+def test_format_trim_result_removes_selected_players():
+    removed = [{"display_name": "Alice", "discord_user_id": 1}]
+    remaining = [{"display_name": "Charlie", "discord_user_id": 3}]
+
+    assert format_trim_result(
+        "Absent without Leave",
+        removed,
+        targeted=True,
+        remaining=remaining,
+        not_listed_names=["Bob"],
+    ) == (
+        "Removed Alice from the wishlist for **Absent without Leave**. "
+        "Still listed: Charlie. Bob was not listed."
+    )
+    assert format_trim_result(
+        "Absent without Leave",
+        [],
+        targeted=True,
+        not_listed_names=["Alice", "Bob"],
+    ) == "Alice, Bob have not wishlisted **Absent without Leave**."
+
+
+def test_plan_wishlist_trim_keep_leaves_named_players():
+    entries = [
+        {"discord_user_id": 1, "display_name": "Alice"},
+        {"discord_user_id": 2, "display_name": "Bob"},
+        {"discord_user_id": 3, "display_name": "Charlie"},
+    ]
+
+    delete_ids, not_listed, abort = plan_wishlist_trim(entries, keep_ids=[3])
+    assert delete_ids == [1, 2]
+    assert not_listed == []
+    assert abort is False
+
+    delete_ids, not_listed, abort = plan_wishlist_trim(entries, keep_ids=[3, 99])
+    assert delete_ids == [1, 2]
+    assert not_listed == [99]
+    assert abort is False
+
+    delete_ids, not_listed, abort = plan_wishlist_trim(entries, keep_ids=[99])
+    assert delete_ids == []
+    assert not_listed == [99]
+    assert abort is True
+
+
+def test_plan_wishlist_trim_remove_and_clear():
+    entries = [
+        {"discord_user_id": 1, "display_name": "Alice"},
+        {"discord_user_id": 2, "display_name": "Bob"},
+    ]
+
+    delete_ids, not_listed, abort = plan_wishlist_trim(entries, remove_ids=[1, 99])
+    assert delete_ids == [1]
+    assert not_listed == [99]
+    assert abort is False
+
+    delete_ids, not_listed, abort = plan_wishlist_trim(entries)
+    assert delete_ids is None
+    assert not_listed == []
+    assert abort is False
+
+
+def test_format_trim_result_keeps_selected_players():
+    removed = [
+        {"display_name": "Alice", "discord_user_id": 1},
+        {"display_name": "Bob", "discord_user_id": 2},
+    ]
+    remaining = [{"display_name": "Charlie", "discord_user_id": 3}]
+
+    assert format_trim_result(
+        "Absent without Leave",
+        removed,
+        kept=True,
+        remaining=remaining,
+    ) == (
+        "Trimmed **Absent without Leave** from the wishlist (Alice, Bob). "
+        "Left on the list: Charlie."
+    )
+    assert format_trim_result(
+        "Absent without Leave",
+        [],
+        kept=True,
+        remaining=remaining,
+    ) == (
+        "Nobody else was listed for **Absent without Leave**. Left on the list: Charlie."
+    )
+    assert format_trim_result(
+        "Absent without Leave",
+        [],
+        kept=True,
+        abort=True,
+        not_listed_names=["Charlie"],
+    ) == (
+        "Charlie has not wishlisted **Absent without Leave**, so nobody was removed."
+    )
 
 
 def test_select_recent_past_sessions_limits_and_dedupes():

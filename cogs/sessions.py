@@ -16,6 +16,9 @@ from utils.wishlist_format import (
     build_browse_catalog,
     build_wishlist_catalog,
     format_browse_catalog,
+    format_trim_result,
+    match_wishlist_adventure,
+    plan_wishlist_trim,
     resolve_wishlist_number,
 )
 
@@ -393,6 +396,147 @@ class Sessions(commands.Cog):
         embed = discord.Embed(title=title, description=body, color=discord.Color.gold())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    async def trim_adventure_autocomplete(self, interaction: discord.Interaction, current: str):
+        catalog = build_wishlist_catalog(db.get_adventure_wishlist())
+        current_lower = current.lower()
+        choices = []
+        for item in catalog:
+            name = item["adventure"]
+            if current_lower and current_lower not in name.lower():
+                continue
+            choices.append(app_commands.Choice(name=name[:100], value=name[:100]))
+            if len(choices) >= 25:
+                break
+        return choices
+
+    @staticmethod
+    def _unique_members(members: list[discord.Member | None]) -> list[discord.Member]:
+        unique: list[discord.Member] = []
+        seen: set[int] = set()
+        for member in members:
+            if member is None or member.id in seen:
+                continue
+            seen.add(member.id)
+            unique.append(member)
+        return unique
+
+    @wishlist_group.command(
+        name="trim",
+        description="After a session, remove an adventure, selected players, or everyone except keep.",
+    )
+    @app_commands.describe(
+        adventure="Adventure to trim (defaults to the latest /gotime session)",
+        number="Adventure number from /wishlist browse",
+        player="Remove this player instead of everyone listed",
+        player2="Another player to remove",
+        player3="Another player to remove",
+        player4="Another player to remove",
+        player5="Another player to remove",
+        keep="Leave this player on the list; remove everyone else",
+        keep2="Another player to leave on the list",
+        keep3="Another player to leave on the list",
+        keep4="Another player to leave on the list",
+        keep5="Another player to leave on the list",
+    )
+    @app_commands.autocomplete(adventure=trim_adventure_autocomplete)
+    @app_commands.checks.has_permissions(administrator=True)
+    async def wishlist_trim(
+        self,
+        interaction: discord.Interaction,
+        adventure: str | None = None,
+        number: int | None = None,
+        player: discord.Member | None = None,
+        player2: discord.Member | None = None,
+        player3: discord.Member | None = None,
+        player4: discord.Member | None = None,
+        player5: discord.Member | None = None,
+        keep: discord.Member | None = None,
+        keep2: discord.Member | None = None,
+        keep3: discord.Member | None = None,
+        keep4: discord.Member | None = None,
+        keep5: discord.Member | None = None,
+    ):
+        if adventure and number is not None:
+            await interaction.response.send_message(
+                "Provide either `adventure` or `number`, not both.",
+                ephemeral=True,
+            )
+            return
+
+        if adventure is not None:
+            adventure = adventure.strip()
+            if not adventure:
+                await interaction.response.send_message("Please provide an adventure name.", ephemeral=True)
+                return
+        elif number is not None:
+            catalog = _wishlist_browse_catalog()
+            resolved = resolve_wishlist_number(catalog, number)
+            if not resolved:
+                await interaction.response.send_message(
+                    f"Invalid number. Use `/wishlist browse` to see options 1–{len(catalog)}.",
+                    ephemeral=True,
+                )
+                return
+            adventure = resolved
+        else:
+            session_name = self._derive_adventure_name()
+            if not session_name:
+                await interaction.response.send_message(
+                    "Could not determine the adventure. Pass `adventure` or `number`, or run `/gotime` first.",
+                    ephemeral=True,
+                )
+                return
+            matched = match_wishlist_adventure(
+                build_wishlist_catalog(db.get_adventure_wishlist()),
+                session_name,
+            )
+            if not matched:
+                await interaction.response.send_message(
+                    f"Could not match the latest session **{session_name}** to a wishlist adventure. "
+                    "Pass `adventure` or `number`.",
+                    ephemeral=True,
+                )
+                return
+            adventure = matched
+
+        remove_targets = self._unique_members([player, player2, player3, player4, player5])
+        keep_targets = self._unique_members([keep, keep2, keep3, keep4, keep5])
+        remove_humans = [member for member in remove_targets if not member.bot]
+        keep_humans = [member for member in keep_targets if not member.bot]
+        if (remove_targets and not remove_humans) or (keep_targets and not keep_humans):
+            await interaction.response.send_message("Bots can't be wishlisted.", ephemeral=True)
+            return
+        if remove_humans and keep_humans:
+            await interaction.response.send_message(
+                "Use `player` to remove people, or `keep` to leave people, not both.",
+                ephemeral=True,
+            )
+            return
+
+        name_by_id = {member.id: member.display_name for member in [*remove_humans, *keep_humans]}
+        entries = db.get_adventure_wishlist_for_adventure(adventure)
+        delete_ids, not_listed_ids, abort = plan_wishlist_trim(
+            entries,
+            remove_ids=[member.id for member in remove_humans] if remove_humans else None,
+            keep_ids=[member.id for member in keep_humans] if keep_humans else None,
+        )
+        removed = [] if abort else db.remove_adventure_wishlist_entries(adventure, delete_ids)
+        remaining = (
+            db.get_adventure_wishlist_for_adventure(adventure)
+            if remove_humans or keep_humans
+            else []
+        )
+        message = format_trim_result(
+            adventure,
+            removed,
+            targeted=bool(remove_humans),
+            kept=bool(keep_humans),
+            abort=abort,
+            remaining=remaining,
+            not_listed_names=[name_by_id[user_id] for user_id in not_listed_ids],
+        )
+        await interaction.response.send_message(message, ephemeral=True)
+
     @app_commands.command(name="gotime", description="Log the current session with everyone in your voice channel.")
     @app_commands.checks.has_permissions(administrator=True)
     async def gotime(self, interaction: discord.Interaction):
@@ -475,6 +619,11 @@ class Sessions(commands.Cog):
 
     @rewards.error
     async def rewards_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message("Only the GM can run this command.", ephemeral=True)
+
+    @wishlist_trim.error
+    async def wishlist_trim_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message("Only the GM can run this command.", ephemeral=True)
 

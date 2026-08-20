@@ -990,3 +990,73 @@ def get_adventure_wishlist() -> list:
         return rows
     finally:
         conn.close()
+
+
+def get_adventure_wishlist_for_adventure(adventure: str) -> list:
+    adventure = adventure.strip()
+    conn = _connect()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """SELECT discord_user_id, adventure, display_name, added_by, created_at
+               FROM adventure_wishlist
+               WHERE adventure=%s
+               ORDER BY display_name, created_at""",
+            (adventure,),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return rows
+    finally:
+        conn.close()
+
+
+def remove_adventure_wishlist_entries(
+    adventure: str,
+    discord_user_ids: list[int] | None = None,
+) -> list[dict]:
+    """Remove wishlist rows for an adventure.
+
+    Pass user ids to remove those players only; omit them to clear everyone.
+    An empty user-id list is a no-op. Returns the rows that were deleted.
+    """
+    adventure = adventure.strip()
+    if discord_user_ids is not None and not discord_user_ids:
+        return []
+
+    conn = _connect()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        if discord_user_ids is None:
+            cursor.execute(
+                """SELECT discord_user_id, adventure, display_name, added_by, created_at
+                   FROM adventure_wishlist
+                   WHERE adventure=%s
+                   ORDER BY display_name, created_at""",
+                (adventure,),
+            )
+        else:
+            placeholders = ",".join(["%s"] * len(discord_user_ids))
+            cursor.execute(
+                f"""SELECT discord_user_id, adventure, display_name, added_by, created_at
+                    FROM adventure_wishlist
+                    WHERE adventure=%s AND discord_user_id IN ({placeholders})
+                    ORDER BY display_name, created_at""",
+                (adventure, *discord_user_ids),
+            )
+        rows = cursor.fetchall()
+        if not rows:
+            cursor.close()
+            return []
+
+        ids = [row["discord_user_id"] for row in rows]
+        placeholders = ",".join(["%s"] * len(ids))
+        cursor.execute(
+            f"DELETE FROM adventure_wishlist WHERE adventure=%s AND discord_user_id IN ({placeholders})",
+            (adventure, *ids),
+        )
+        conn.commit()
+        cursor.close()
+        return rows
+    finally:
+        conn.close()

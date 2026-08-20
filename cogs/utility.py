@@ -70,6 +70,7 @@ class Utility(commands.Cog):
                     "`/wishlist add adventure player` — Add an adventure request for another player\n"
                     "`/wishlist list all:true` — View every adventure request\n"
                     "`/wishlist list player` — View another player's requests\n"
+                    "`/wishlist trim` — After a session, remove an adventure, selected players, or everyone except `keep`\n"
                     "`/announce` — Post the P4ND0 abilities ad\n"
                     "`/character add player` — Add a character to another player's profile\n"
                     "`/character list player` — View another player's characters\n"
