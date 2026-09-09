@@ -24,7 +24,7 @@ frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-idna==3.11
+idna==3.19
     # via
     #   requests
     #   yarl
@@ -60,7 +60,7 @@ typing-extensions==4.15.0 ; python_full_version < '3.13'
     #   aiosignal
 tzdata==2026.2
     # via p4nd0-bot
-urllib3==2.6.3
+urllib3==2.7.0
     # via requests
 yarl==1.23.0
     # via aiohttp
