@@ -1,10 +1,22 @@
+import asyncio
 import os
+from zoneinfo import ZoneInfo
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 
 from utils import db
+from utils.adventure_catalog import (
+    fetch_catalog,
+    find_matching_name,
+    get_catalog,
+    load_prepped_names,
+    mark_prepped,
+    resolve_adventure_name,
+    set_catalog,
+    suggest_adventures,
+)
 from utils.log import log
 from utils.session_format import build_gotime_embed
 from utils.warhorn_api import (
@@ -14,8 +26,10 @@ from utils.warhorn_api import (
 )
 from utils.wishlist_format import (
     build_browse_catalog,
+    build_player_wishlists,
     build_wishlist_catalog,
     format_browse_catalog,
+    format_player_wishlists,
     format_trim_result,
     match_wishlist_adventure,
     plan_wishlist_trim,
@@ -28,24 +42,13 @@ DAN_TEXT_CHANNEL_ID = 701628514004238416
 DAN_SESSION_LOGS_CHANNEL_ID = 1324201074382344213
 REWARDS_STATIC = "10 downtime, level if you want it"
 DEFAULT_STREAMING = "2 hours streaming"
+EASTERN = ZoneInfo("America/New_York")
 
 
 def _format_user_wishlist(entries: list[dict]) -> str:
     if not entries:
         return "*Nothing wishlisted yet.*"
     return "\n".join(f"• {entry['adventure']}" for entry in entries)
-
-
-def _format_all_wishlists(entries: list[dict]) -> str:
-    catalog = build_wishlist_catalog(entries)
-    if not catalog:
-        return "*No wishlist entries yet.*"
-
-    sections = []
-    for item in catalog:
-        names = ", ".join(item["requesters"])
-        sections.append(f"**{item['adventure']}**\n{names}")
-    return "\n\n".join(sections)
 
 
 def _wishlist_browse_embed(*, include_requesters: bool = False) -> discord.Embed | None:
@@ -72,6 +75,22 @@ def _wishlist_browse_catalog() -> list[dict]:
     return build_browse_catalog(db.get_adventure_wishlist(), db.get_recent_warhorn_sessions(limit=8))
 
 
+def _known_adventure_names(catalog: list[dict]) -> list[str]:
+    return [item["adventure"] for item in catalog]
+
+
+def _recent_session_choices() -> list[tuple[str, str]]:
+    recent = []
+    for session in db.get_recent_warhorn_sessions(limit=8):
+        played = parse_warhorn_dt(session["startsAt"]).astimezone(EASTERN)
+        recent.append((session["name"], f"{played:%b} {played.day}"))
+    return recent
+
+
+def _choices(pairs: list[tuple[str, str]]) -> list[app_commands.Choice[str]]:
+    return [app_commands.Choice(name=label, value=value) for label, value in pairs]
+
+
 class Sessions(commands.Cog):
     wishlist_group = app_commands.Group(
         name="wishlist",
@@ -80,6 +99,42 @@ class Sessions(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.warhorn_client = WarhornClient(WARHORN_API_ENDPOINT, os.getenv("WARHORN_APPLICATION_TOKEN"))
+        self.refresh_adventure_catalog.start()
+
+    def cog_unload(self):
+        self.refresh_adventure_catalog.cancel()
+
+    @tasks.loop(hours=24)
+    async def refresh_adventure_catalog(self):
+        try:
+            entries = await asyncio.to_thread(fetch_catalog)
+        except Exception as e:
+            log(f"[Sessions] Adventure catalog fetch failed, keeping {len(get_catalog())} cached entries: {e}")
+            return
+        try:
+            prepped = mark_prepped(entries, load_prepped_names())
+        except Exception as e:
+            log(f"[Sessions] Could not read prepped adventures: {e}")
+            prepped = 0
+        set_catalog(entries)
+        log(f"[Sessions] Loaded {len(entries)} adventures from the catalog ({prepped} prepped).")
+
+    async def wishlist_adventure_autocomplete(self, interaction: discord.Interaction, current: str):
+        wishlist_names = [item["adventure"] for item in build_wishlist_catalog(db.get_adventure_wishlist())]
+        return _choices(suggest_adventures(
+            current,
+            wishlist_names=wishlist_names,
+            recent=_recent_session_choices(),
+            catalog=get_catalog(),
+        ))
+
+    async def remove_adventure_autocomplete(self, interaction: discord.Interaction, current: str):
+        target_id = getattr(interaction.namespace.player, "id", None) or interaction.user.id
+        is_admin = bool(interaction.guild and interaction.user.guild_permissions.administrator)
+        if target_id != interaction.user.id and not is_admin:
+            target_id = interaction.user.id
+        names = [entry["adventure"] for entry in db.get_adventure_wishlist_for_user(target_id)]
+        return _choices(suggest_adventures(current, wishlist_names=names, recent=[], catalog=[], wishlist_label=""))
 
     async def _get_channel(self, channel_id: int):
         channel = self.bot.get_channel(channel_id)
@@ -224,10 +279,11 @@ class Sessions(commands.Cog):
 
     @wishlist_group.command(name="add", description="Add an adventure to the wishlist.")
     @app_commands.describe(
-        adventure="Adventure name (freeform text)",
+        adventure="Adventure name or code; pick a suggestion or type your own",
         number="Join an existing request by number from /wishlist browse",
         player="Another player to add for (admin only)",
     )
+    @app_commands.autocomplete(adventure=wishlist_adventure_autocomplete)
     async def wishlist_add(
         self,
         interaction: discord.Interaction,
@@ -254,8 +310,8 @@ class Sessions(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
+        catalog = _wishlist_browse_catalog()
         if number is not None:
-            catalog = _wishlist_browse_catalog()
             resolved = resolve_wishlist_number(catalog, number)
             if not resolved:
                 await interaction.response.send_message(
@@ -269,6 +325,8 @@ class Sessions(commands.Cog):
             if not adventure:
                 await interaction.response.send_message("Please provide an adventure name.", ephemeral=True)
                 return
+        typed = adventure if number is None else None
+        adventure = resolve_adventure_name(adventure, _known_adventure_names(catalog), get_catalog())
 
         if player and player.id != interaction.user.id:
             if not interaction.user.guild_permissions.administrator:
@@ -285,7 +343,9 @@ class Sessions(commands.Cog):
         target = player or interaction.user
         added_by_other = target.id != interaction.user.id
 
-        newly_added = db.add_adventure_wishlist(
+        target_names = [entry["adventure"] for entry in db.get_adventure_wishlist_for_user(target.id)]
+        existing = find_matching_name(adventure, target_names, get_catalog())
+        newly_added = not existing and db.add_adventure_wishlist(
             target.id,
             adventure,
             target.display_name,
@@ -294,7 +354,7 @@ class Sessions(commands.Cog):
 
         if not newly_added:
             await interaction.response.send_message(
-                f"{target.display_name} already wishlisted **{adventure}**.",
+                f"{target.display_name} already wishlisted **{existing or adventure}**.",
                 ephemeral=True,
             )
             return
@@ -306,23 +366,49 @@ class Sessions(commands.Cog):
                 f"Added **{adventure}** to your wishlist. "
                 f"Use `/wishlist remove adventure:{adventure}` to take it off."
             )
+        if typed and typed != adventure:
+            message += f"\n-# Matched from “{typed}”."
         await interaction.response.send_message(message, ephemeral=True)
 
     @wishlist_group.command(name="remove", description="Remove an adventure from the wishlist.")
     @app_commands.describe(
         adventure="The adventure name to remove",
+        number="Adventure number from /wishlist browse",
         player="Another player to remove for (admin only)",
     )
+    @app_commands.autocomplete(adventure=remove_adventure_autocomplete)
     async def wishlist_remove(
         self,
         interaction: discord.Interaction,
-        adventure: str,
+        adventure: str | None = None,
+        number: int | None = None,
         player: discord.Member | None = None,
     ):
-        adventure = adventure.strip()
-        if not adventure:
-            await interaction.response.send_message("Please provide an adventure name.", ephemeral=True)
+        if adventure and number is not None:
+            await interaction.response.send_message(
+                "Provide either `adventure` or `number`, not both.",
+                ephemeral=True,
+            )
             return
+
+        if number is not None:
+            catalog = _wishlist_browse_catalog()
+            resolved = resolve_wishlist_number(catalog, number)
+            if not resolved:
+                await interaction.response.send_message(
+                    f"Invalid number. Use `/wishlist browse` to see options 1–{len(catalog)}.",
+                    ephemeral=True,
+                )
+                return
+            adventure = resolved
+        else:
+            adventure = (adventure or "").strip()
+            if not adventure:
+                await interaction.response.send_message(
+                    "Please provide an adventure name or a `number` from `/wishlist browse`.",
+                    ephemeral=True,
+                )
+                return
 
         if player and player.id != interaction.user.id:
             if not interaction.user.guild_permissions.administrator:
@@ -335,11 +421,13 @@ class Sessions(commands.Cog):
         target = player or interaction.user
         added_by_other = target.id != interaction.user.id
 
+        target_names = [entry["adventure"] for entry in db.get_adventure_wishlist_for_user(target.id)]
+        adventure = find_matching_name(adventure, target_names, get_catalog()) or adventure
         if not db.remove_adventure_wishlist(target.id, adventure):
-            await interaction.response.send_message(
-                f"{target.display_name} hasn't wishlisted **{adventure}**.",
-                ephemeral=True,
-            )
+            message = f"{target.display_name} hasn't wishlisted **{adventure}**."
+            if number is None and adventure.isdigit():
+                message += f" To remove by list number, use `number:{adventure}`."
+            await interaction.response.send_message(message, ephemeral=True)
             return
 
         if added_by_other:
@@ -372,8 +460,8 @@ class Sessions(commands.Cog):
                 return
 
             entries = db.get_adventure_wishlist()
-            body = _format_all_wishlists(entries)
-            title = "Adventure Wishlist"
+            body = format_player_wishlists(build_player_wishlists(entries))
+            title = "Adventure Wishlist by Player"
         elif player and player.id != interaction.user.id:
             if not is_admin:
                 await interaction.response.send_message(
@@ -468,6 +556,8 @@ class Sessions(commands.Cog):
             if not adventure:
                 await interaction.response.send_message("Please provide an adventure name.", ephemeral=True)
                 return
+            wishlist_names = _known_adventure_names(build_wishlist_catalog(db.get_adventure_wishlist()))
+            adventure = find_matching_name(adventure, wishlist_names, get_catalog()) or adventure
         elif number is not None:
             catalog = _wishlist_browse_catalog()
             resolved = resolve_wishlist_number(catalog, number)

@@ -46,7 +46,7 @@ class Utility(commands.Cog):
             value=(
                 "`/wishlist browse` — See adventures others requested (numbered)\n"
                 "`/wishlist add adventure` or `number` — Join or request an adventure\n"
-                "`/wishlist remove adventure` — Remove one of your requests\n"
+                "`/wishlist remove adventure` or `number` — Remove one of your requests\n"
                 "`/wishlist list` — View your wishlist"
             ),
             inline=False,
@@ -68,7 +68,7 @@ class Utility(commands.Cog):
                     "`/gotime-preview` — Preview what /gotime would do (no changes)\n"
                     "`/rewards` — Post session rewards to #dan-session-logs\n"
                     "`/wishlist add adventure player` — Add an adventure request for another player\n"
-                    "`/wishlist list all:true` — View every adventure request\n"
+                    "`/wishlist list all:true` — View every request, grouped by player\n"
                     "`/wishlist list player` — View another player's requests\n"
                     "`/wishlist trim` — After a session, remove an adventure, selected players, or everyone except `keep`\n"
                     "`/announce` — Post the P4ND0 abilities ad\n"

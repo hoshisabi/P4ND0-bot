@@ -1,0 +1,764 @@
+{
+  "adventures": [
+    {
+      "name": "CCC-AETHER-01-01 The Heir of Orcus: Verse I",
+      "file": "CCC-AETHER-01-01 The Heir of Orcus Verse I.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-AETHER-01-02 The Heir of Orcus: Verse II",
+      "file": "CCC-AETHER-01-02 The Heir of Orcus Verse II.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-AETHER02-01 The Heir of Orcus: Verse IV",
+      "file": "CCC-AETHER02-01 The Heir of Orcus Verse IV.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-BWM-005 Chasing Madness",
+      "file": "CCC-BWM-005 Chasing Madness.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GARY-04 The Darkness of the Mountains",
+      "file": "CCC-GARY-04 The Darkness of the Mountains.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GARY-05 The Shadows of the Trees",
+      "file": "CCC-GARY-05 The Shadows of the Trees.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GARY-06 The Death Beneath the Roots",
+      "file": "CCC-GARY-06 The Death Beneath the Roots.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GARY-07 The Mirror Cities of Gulthias",
+      "file": "CCC-GARY-07 The Mirror Cities of Gulthias.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GARY-08 That Which Lies Buried",
+      "file": "CCC-GARY-08 That Which Lies Buried.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GARY-09 The Witch Maiden",
+      "file": "CCC-GARY-09 The Witch Maiden.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GLIP-01-01 Glip Dak",
+      "file": "CCC-GLIP-01-01 Glip Dak.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GLIP-01-02 Beneath Glip Dak",
+      "file": "CCC-GLIP-01-02 Beneath Glip Dak.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GLIP-01-03 Citadel of Vlaakith",
+      "file": "CCC-GLIP-01-03 Citadel of Vlaakith.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GLIP-02-01 Blue Scales",
+      "file": "CCC-GLIP-02-01 Blue Scales.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-GSP-NTHR01-01 A Night of Sorrows",
+      "file": "CCC-GSP-NTHR01-01 A Night of Sorrows.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-JGD-01 Left Black and Blue: A Red War Story",
+      "file": "CCC-JGD-01 Left Black and Blue_ A Red War Story.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-KUMORI-01-01 Wreckers",
+      "file": "CCC-KUMORI-01-01 Wreckers.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-KUMORI-01-02 Wretches",
+      "file": "CCC-KUMORI-01-02 Wretches.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-MELB-02 The Sunken Sepulcher",
+      "file": "CCC-MELB-02 The Sunken Sepulcher.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-PDXAGE-01-01 The White Well",
+      "file": "CCC-PDXAGE-01-01 The White Well.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-PDXAGE-02-01 The Dark Hunt",
+      "file": "CCC-PDXAGE-02-01 The Dark Hunt.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-ROLL20-02 The Heir of Orcus: Verse III",
+      "file": "CCC-ROLL20-02 HEIR3 The Heir of Orcus Verse III.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-SFBAY-04-03 The Ashen Scar",
+      "file": "CCC-SFBAY-04-03 The Ashen Scar.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-SQC-03-03 Toxicity",
+      "file": "CCC-SQC 03-03 Toxicity.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-SVH-01-01 Dawn of the Raven Lord",
+      "file": "CCC-SVH-01-01 Dawn of the Raven Lord.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-SVH-01-02 Raven Lord’s Aerie",
+      "file": "CCC-SVH-01-02 Raven Lord’s Aerie.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-SVH-01-03 Vault of the Raven Lord",
+      "file": "CCC-SVH-01-03 Vault of the Raven Lord.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-UBCON01-03 Grime and Gears",
+      "file": "CCC-UBCON01-03 Grime and Gears.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-UCON-01 Blood & Fog",
+      "file": "CCC-UCON-01 Blood and Fog.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-UCON02-02 Rescue Down Under",
+      "file": "CCC-UCON02-02 Rescue Down Under.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-UCON03 The Straw Bears",
+      "file": "CCC-UCON-03 Straw Bears.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-ZIEGE-04-01 The Miser's Glory",
+      "file": "CCC-ZIEGE-04-01 The Miser's Glory.zip",
+      "matched": true
+    },
+    {
+      "name": "CCC-ZIEGE-04-02 The Widow's Fang",
+      "file": "CCC-ZIEGE-04-02 The Widow's Fang.zip",
+      "matched": true
+    },
+    {
+      "name": "DC-POA-CONMAR-01 Something Sinister",
+      "file": "DC-PoA-CONMAR-01 Something Sinister.zip",
+      "matched": true
+    },
+    {
+      "name": "DC-POA-CONMAR-17 Unrelenting",
+      "file": "DC-POA-CONMAR-17 Unrelenting.zip",
+      "matched": true
+    },
+    {
+      "name": "DC-POA-CTH1 Roused by Raiders",
+      "file": "DC-PoA-CTH1 Roused by Raiders.zip",
+      "matched": true
+    },
+    {
+      "name": "DC-POA-DCAF04 A Macabre Nightal",
+      "file": "DC-PoA-DCAF04 A Macabre Nightal.zip",
+      "matched": true
+    },
+    {
+      "name": "DC-POA-MCIW-01 Icewind Whale",
+      "file": "DC-PoA-MCIW-01 Icewind Whale.zip",
+      "matched": true
+    },
+    {
+      "name": "DC-POA-PND-1 Someone Dropped the Goat-Ball",
+      "file": "DC-POA-PND-1 Someone Dropped the Goat-Ball.zip",
+      "matched": true
+    },
+    {
+      "name": "DC-POA-PND-4 Eateat Go Home?",
+      "file": "DC-POA-PND-4 Eateat Go Home_.zip",
+      "matched": true
+    },
+    {
+      "name": "DC-POA-PND-5 What Stalks the Night?",
+      "file": "DC-POA-PND-5 What Stalks the Night.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL-DRW-01 Breaking Umberlee's Resolve",
+      "file": "DDAL-DRW-01 Breaking Umberlee's Resolve.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL00-04 Winter's Flame",
+      "file": "DDAL00-04 Winter's Flame.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL00-05 Winter's Splendor",
+      "file": "DDAL00-05 Winter's Splendor.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL04-02 The Beast",
+      "file": "DDAL4-02 The Beast.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL04-03 The Executioner",
+      "file": "DDAL4-03 The Executioner.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL04-04 The Marionette",
+      "file": "DDAL4-04 The Marionette.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL04-05 The Seer",
+      "file": "DDAL4-05 The Seer.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL04-06 The Ghost",
+      "file": "DDAL4-06 The Ghost.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL04-08 The Broken One",
+      "file": "DDAL4-08 The Broken One.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL04-09 The Tempter",
+      "file": "DDAL4-09 The Tempter.zip",
+      "matched": true
+    },
+    {
+      "name": "DDAL05-17 Hartkiller's Horn",
+      "file": "DDAL05-17 Hartkiller’s Horn.zip",
+      "matched": true
+    },
+    {
+      "name": "DDEX03-13 Writhing in the Dark",
+      "file": "DDEX3-13 Writhing in the Dark.zip",
+      "matched": true
+    },
+    {
+      "name": "DDHC-VEOR Vecna: Nest of the Eldritch Eye",
+      "file": "Vecna_ Nest of the Eldritch Eye.zip",
+      "matched": true
+    },
+    {
+      "name": "EB-20 Old Scores",
+      "file": "DDAL-EB-20 Old Scores.zip",
+      "matched": true
+    },
+    {
+      "name": "EB-EP-04 The Last War",
+      "file": "DDAL-EBEP-04 The Last War.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-BG The Flying Flame",
+      "file": "FR-DC-BG The Flying Flame.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-CONMAR-01 Tower Up!",
+      "file": "FR-DC-CONMAR-01 Tower Up!.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-CONMAR-03 The Scent of Sawdust",
+      "file": "FR-DC-CONMAR-03 The Scent of Sawdust.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-CURSE Is this a Curse?",
+      "file": "FR-DC-CURSE Is this a Curse.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-DRESS-01 Goblin In A Dress",
+      "file": "FR-DC-DRESS-01 Goblin in a Dress.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-GAMEJAM-01 Only (Peacock) Fans",
+      "file": "FR-DC-GAMEJAM-01_ Only (Peacock) Fans.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-IMP-01 Blood Price",
+      "file": "FR-DC-IMP-01 Blood Price.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-LOOSE-01 Spells on the Loose",
+      "file": "FR-DC-LOOSE-001 Spells on the Loose.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-MELB-02-01 Voyage into Darkness",
+      "file": "FR-DC-MELB-02-01 Voyage into Darkness.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-NMB2-01 Better Together",
+      "file": "FR-DC-NMB2-01 Better Together.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-QLA-01 Mel’s Pit",
+      "file": "FR-DC-QLA-01 Mel's Pit.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-RFJK-01 Punny You Ask",
+      "file": "FR-DC-RFJK-01 Punny You Ask.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-RPSG-09 Ruckus at the Reception",
+      "file": "FR-DC-RPSG-09 Ruckus at the Reception.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-RPSG-10 Chaos at the Convention",
+      "file": "FR-DC-RPSG-10 Chaos at the Convention.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-TGT-01 Kobolds Are The Worst Guests!",
+      "file": "FR-DC-TGT-01 Kobolds Are The Worst Guests!.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-TGT-02 Those Who Plant",
+      "file": "FR-DC-TGT-02 Those Who Plant.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-TGT-03 The Show Must Go On",
+      "file": "FR-DC-TGT-03 The Show Must Go On.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-TKM-WW What's Within",
+      "file": "FR-DC-TKM-WW What's Within.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-UCON25-01 Burl Trouble",
+      "file": "FR-DC-UCON25 Welcome to Basht.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-UCON25-02 Oily Conundrum",
+      "file": "FR-DC-UCON25 Welcome to Basht.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-UCON25-03 Beneath the Burl",
+      "file": "FR-DC-UCON25 Welcome to Basht.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-WATERDEEP-CHZ Sweet Dreams are Made of Cheese",
+      "file": "FR-DC-WATERDEEP-CHZ Sweet Dreams are Made of Cheese.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-WATERDEEP-KYZ Sweet Dreams are Made of Keys",
+      "file": "FR-DC-WATERDEEP-KYZ Sweet Dreams are Made of Keys.zip",
+      "matched": true
+    },
+    {
+      "name": "Giants of the Star Forge",
+      "file": "Giants of the Star Forge.zip",
+      "matched": true
+    },
+    {
+      "name": "LN-1 Fuzzytale Farm and the Frightful Candy Goat Massacre",
+      "file": "LN1 Fuzzytale Farm and the Frightful Candy Goat Massacre.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-BINGO-1 Lorem Ipsum",
+      "file": "PS-DC-BINGO-1 Lorem Ipsum.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-BINGO-2 Esse Est Percipi",
+      "file": "PS-DC-BINGO-2 Esse Est Percipi.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-CAKE-01 Cake Wars",
+      "file": "PS-DC-CAKE-01 Cake Wars.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-HNL-01 Nowhere Fast",
+      "file": "PS-DC-HNL-01 Nowhere Fast.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-HNL-02 The Hungry Prince",
+      "file": "PS-DC-HNL-02 The Hungry Prince.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-HNL-03 Ardragon of Sigil",
+      "file": "PS-DC-HNL-03 Ardragon of Sigil.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-MORD-01 Mordenkainen's Memory Palace",
+      "file": "PS-DC-MORD-01 Mordenkainen's Memory Palace.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-NBDD-01 The Greatest Gameshow",
+      "file": "PS-DC-NBDD-01 The Greatest Gameshow.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-01 Automatic Updates",
+      "file": "PS-DC-PUB-01 Automatic Updates.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-02 Endless Glory",
+      "file": "PS-DC-PUB-02 Endless Glory.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-03 Hunters in the Night",
+      "file": "PS-DC-PUB-03 Hunters in the Night.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-04 Market Value",
+      "file": "PS-DC-PUB-04 Market Value.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-05 Rock Bottom",
+      "file": "PS-DC-PUB-05 Rock Bottom.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-06 Death Do Us Part",
+      "file": "PS-DC-PUB-06 Death Do Us Part.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-07 Professor Bartlesby's Inventorium",
+      "file": "PS-DC-PUB-07 Professor Bartlesby's Inventorium.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-08 Unremembered Things",
+      "file": "PS-DC-PUB-08 Unremembered Things.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-09 Reign of Frogs",
+      "file": "PS-DC-PUB-09 Reign of Frogs.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-10 Absent without Leave",
+      "file": "PS-DC-PUB-10 Absent without Leave.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-11 Fallen for You",
+      "file": "PS-DC-PUB-11 Fallen for You.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-12 The Endless Revel",
+      "file": "PS-DC-PUB-12 The Endless Revel.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-13 Escape from Paradise",
+      "file": "PS-DC-PUB-13 Escape from Paradise.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-14 Beneath the Prison Tree",
+      "file": "PS-DC-PUB-14 Beneath the Prison Tree.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-15 Spider Hunt",
+      "file": "PS-DC-PUB-15 Spider Hunt.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-PUB-16 Juxtaposition",
+      "file": "PS-DC-PUB-16 Juxtaposition.zip",
+      "matched": true
+    },
+    {
+      "name": "PS-DC-RAVENGARD-V Duke Ravengard Gets Sent to Hell (Again)",
+      "file": "PS-DC-RAVENGARD-V Duke Ravengard Gets Sent to Hell (Again).zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-ANGKA-02 The Pursuit of Happiness",
+      "file": "SJ-DC-ANGKA-02 The Pursuit of Happiness.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-ANGKA-05 Never Let Me Go",
+      "file": "SJ-DC-ANGKA-05 Never Let Me Go.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-ANGKA-06 Moving Up in the World",
+      "file": "SJ-DC-ANGKA-06 Moving Up in the World.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-BAD-01 Bad Omen",
+      "file": "SJ-DC-BAD-01 Bad Omen.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-BAD-02 Space Hamsterball Run!",
+      "file": "SJ-DC-BAD-02 Space Hamsterball Run!.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-BAD-03 Festival of Frun",
+      "file": "SJ-DC-BAD-03 Festival of Frun.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-BST-04 Blasted",
+      "file": "SJ-DC-BST-04 Blasted.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-BST-06 Come Together on the Giffstar",
+      "file": "SJ-DC-BST-06 Come Together on the Giffstar.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-CJK01-01 A Whale of a Time",
+      "file": "SJ-DC-CJK01-01 A Whale of a Time.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-CJK02 The Tavern at the End of the Wildspace",
+      "file": "SJ-DC-CJK02 The Tavern at the End of the Wildspace.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-CONMAR-01 Who Killed Marcus?",
+      "file": "SJ-DC-CONMAR-01 Who Killed Marcus.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-CONMAR-02 A Kraken Good Story",
+      "file": "SJ-DC-CONMAR-02 A Kraken Good Story.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-CONMAR-03 Heart of Shards",
+      "file": "SJ-DC-CONMAR-03 Heart of Shards.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-CONMAR-04 Finally Saving Marcus",
+      "file": "SJ-DC-CONMAR-04 Finally Saving Marcus.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-DD-04 The Highest Bidder",
+      "file": "SJ-DC-DD-04 The Highest Bidder(1).zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-DD-06 The Prime Strikers",
+      "file": "SJ-DC-DD-06 The Prime Strikers (2q).zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-DD-07 Sinaya's Song",
+      "file": "SJ-DC-DD-07 Sinaya's Song (3).zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-DEN-H-4 Departure from Fallen Stars",
+      "file": "SJ-DC-DEN-H4 Departure from Fallen Stars.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-IGC-ECP-01 Stoneheart",
+      "file": "SJ-DC-IGC-ECP-01 Stoneheart.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-IGC-ECP-02 Coldsnap",
+      "file": "SJ-DC-IGC-ECP-02 Coldsnap.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-IGC-ECP-03 Conflagration",
+      "file": "SJ-DC-IGC-ECP-03 Conflagration.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-IGC-ECP-04 Cyclone",
+      "file": "SJ-DC-IGC-ECP-04 Cyclone.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-IGC-ECP-05 Behold, Tiamatron",
+      "file": "SJ-DC-IGC-ECP-05 Behold, Tiamatron.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-KGV-01 Moonlit Mysteries: A Heist to Remember",
+      "file": "SJ-DC-KGV-01 Moonlit Mysteries_ A Heist to Remember.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-MB06-ATFT A Taste For Trouble",
+      "file": "SJ-DC-MB06-ATFT A Taste For Trouble.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-MONSTER-01 Phoenix",
+      "file": "SJ-DC-MONSTER-01 Phoenix.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-NMB1-01 An Enemy",
+      "file": "SJ-DC-NMB1-01 An Enemy.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-NMB1-02 Kindred Spirits",
+      "file": "SJ-DC-NMB1-02 Kindred Spirits.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-NMB1-03 Conclusion in Karpri",
+      "file": "SJ-DC-NMB1-03 Conclusion in Karpri.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-PAT-00 The Moonshot",
+      "file": "SJ-DC-PAT-00 The Moonshot.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-PHP-FLN01-01 Forlorn But Not Forgotten",
+      "file": "SJ-DC-PHP-FLN01-01 Forlorn but not Forgotten.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-PND-1 The Monster at the End of this Adventure",
+      "file": "SJ-DC-PND-1 There are Monsters in this Adventure.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-PND-2 The Very Hungry Monster",
+      "file": "SJ-DC-PND-2 The Very Hungry Monster.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-PND-3 The Little Monster",
+      "file": "SJ-DC-PND-3 The Little Monster.zip",
+      "matched": true
+    },
+    {
+      "name": "SJ-DC-VEN-01 S.O.S.",
+      "file": "SJ-DC-VEN-01 SOS.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-ANDL-01 The Petrified Forest",
+      "file": "WBW-DC-ANDL-01 The Petrified Forest.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-BERRY-00 Berry Note",
+      "file": "WBW-DC-BERRY-00 Berry Note.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-FDC-07 A Meal to Remember",
+      "file": "WBW-DC-FDC-07 A Meal to Remember.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-NBDD-02 15 Seconds to Curtain",
+      "file": "WBW-DC-NBDD-02 15 Seconds to Curtain.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-PHP-LCL-01 A Cure for Freedom",
+      "file": "WBW-DC-PHP-LCL-01 A Cure for Freedom.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-PHP-LCL-02 A Mystical Whimsy",
+      "file": "WBW-DC-PHP-LCL-02 A Mystical Whimsy.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-TRI-02 Nothing Ventured",
+      "file": "WBW-DC-TRI-02 Nothing Ventured.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-TST-01 Color in Light",
+      "file": "WBW-DC-TST-01 Color in Light.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-UCON-01 The Party that Split",
+      "file": "WBW-DC-UCON-01 The Party that Split.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-UCON-02 Have You No Heart?",
+      "file": "WBW-DC-UCON-02 Have You No Heart.zip",
+      "matched": true
+    },
+    {
+      "name": "WBW-DC-WRT-00 Writer's Block",
+      "file": "WBW-DC-WRT-00 Writer's Block.zip",
+      "matched": true
+    }
+  ]
+}

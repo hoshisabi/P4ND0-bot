@@ -1,3 +1,4 @@
+from utils.adventure_catalog import normalize
 from utils.warhorn_api import parse_warhorn_dt
 
 RECENT_WARHORN_COUNT = 8
@@ -27,13 +28,20 @@ def build_browse_catalog(
     *,
     recent_limit: int = RECENT_WARHORN_COUNT,
 ) -> list[dict]:
-    """Wishlist requests first, then recent Warhorn adventures not already listed."""
-    catalog = build_wishlist_catalog(wishlist_entries)
-    listed_names = {item["adventure"].casefold() for item in catalog}
+    """Wishlist requests first, then the most recent Warhorn adventures.
 
-    for session in recent_sessions[:recent_limit]:
+    Recent sessions are listed even when the same adventure is also on the
+    wishlist, so the section always reflects what actually ran lately. Both
+    numbers resolve to the same adventure name.
+    """
+    catalog = build_wishlist_catalog(wishlist_entries)
+    recent_names: set[str] = set()
+
+    for session in recent_sessions:
+        if len(recent_names) >= recent_limit:
+            break
         adventure = session["name"]
-        if adventure.casefold() in listed_names:
+        if adventure.casefold() in recent_names:
             continue
         catalog.append({
             "adventure": adventure,
@@ -41,9 +49,43 @@ def build_browse_catalog(
             "source": "warhorn",
             "played_at": parse_warhorn_dt(session["startsAt"]),
         })
-        listed_names.add(adventure.casefold())
+        recent_names.add(adventure.casefold())
 
     return catalog
+
+
+def build_player_wishlists(entries: list[dict]) -> list[dict]:
+    """Group wishlist entries by player, sorted by player name.
+
+    Display names are captured when an entry is added, so one player can have
+    several (e.g. a nickname that tracks their current character). The name
+    from the player's newest entry wins.
+    """
+    by_user: dict[int, list[dict]] = {}
+    for entry in entries:
+        by_user.setdefault(entry["discord_user_id"], []).append(entry)
+
+    players = []
+    for user_id, user_entries in by_user.items():
+        dated = [entry for entry in user_entries if entry.get("created_at")]
+        newest = max(dated, key=lambda entry: entry["created_at"]) if dated else user_entries[-1]
+        name = newest.get("display_name") or f"user {user_id}"
+        adventures = sorted({entry["adventure"] for entry in user_entries}, key=str.casefold)
+        players.append({"discord_user_id": user_id, "display_name": name, "adventures": adventures})
+
+    players.sort(key=lambda player: player["display_name"].casefold())
+    return players
+
+
+def format_player_wishlists(players: list[dict]) -> str:
+    if not players:
+        return "*No wishlist entries yet.*"
+
+    sections = []
+    for player in players:
+        lines = "\n".join(f"• {adventure}" for adventure in player["adventures"])
+        sections.append(f"**{player['display_name']}**\n{lines}")
+    return "\n\n".join(sections)
 
 
 def format_wishlist_catalog(catalog: list[dict]) -> str:
@@ -91,9 +133,10 @@ def resolve_wishlist_number(catalog: list[dict], number: int) -> str | None:
 def match_wishlist_adventure(catalog: list[dict], name: str) -> str | None:
     """Match a session or typed title to a single wishlist adventure.
 
-    Prefers an exact name, then case-insensitive equality, then a unique
-    containment match so Warhorn titles like ``PS-DC-PUB-10 Absent without Leave``
-    can resolve to ``Absent without Leave``. Returns None if missing or ambiguous.
+    Prefers an exact name, then equality ignoring case and punctuation, then a
+    unique whole-word containment match so Warhorn titles like
+    ``PS-DC-PUB-10 Absent without Leave`` can resolve to ``Absent without Leave``.
+    Returns None if missing or ambiguous.
     """
     name = (name or "").strip()
     if not name or not catalog:
@@ -103,17 +146,21 @@ def match_wishlist_adventure(catalog: list[dict], name: str) -> str | None:
     if name in adventures:
         return name
 
-    folded = name.casefold()
-    casefold_matches = [adventure for adventure in adventures if adventure.casefold() == folded]
-    if len(casefold_matches) == 1:
-        return casefold_matches[0]
-    if len(casefold_matches) > 1:
+    key = normalize(name)
+    if not key:
+        return None
+    equal_matches = [adventure for adventure in adventures if normalize(adventure) == key]
+    if len(equal_matches) == 1:
+        return equal_matches[0]
+    if len(equal_matches) > 1:
         return None
 
+    padded = f" {key} "
     contained = [
         adventure
         for adventure in adventures
-        if folded in adventure.casefold() or adventure.casefold() in folded
+        if normalize(adventure)
+        and (padded in f" {normalize(adventure)} " or f" {normalize(adventure)} " in padded)
     ]
     if len(contained) == 1:
         return contained[0]

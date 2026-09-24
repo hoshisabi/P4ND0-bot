@@ -5,8 +5,10 @@ from utils.warhorn_api import select_recent_past_sessions
 from utils.wishlist_format import (
     RECENT_WARHORN_COUNT,
     build_browse_catalog,
+    build_player_wishlists,
     build_wishlist_catalog,
     format_browse_catalog,
+    format_player_wishlists,
     format_trim_result,
     match_wishlist_adventure,
     plan_wishlist_trim,
@@ -55,10 +57,46 @@ def test_build_browse_catalog_appends_recent_warhorn_sessions():
 
     catalog = build_browse_catalog(wishlist, recent)
 
-    assert len(catalog) == 2
-    assert catalog[0]["source"] == "wishlist"
-    assert catalog[1]["adventure"] == "Dragon of Icespire Peak"
-    assert catalog[1]["source"] == "warhorn"
+    assert [(item["adventure"], item["source"]) for item in catalog] == [
+        ("Absent without Leave", "wishlist"),
+        ("Absent without Leave", "warhorn"),
+        ("Dragon of Icespire Peak", "warhorn"),
+    ]
+
+
+def test_build_browse_catalog_recent_sessions_not_crowded_out_by_wishlist():
+    wishlist = [_entry(f"Wishlisted {n}", "Alice") for n in range(3)]
+    recent = [
+        _session(f"Wishlisted {n}", datetime(2026, 9, 16 - 7 * n, 19, 0, tzinfo=EASTERN))
+        for n in range(3)
+    ] + [_session("Only run", datetime(2026, 8, 19, 19, 0, tzinfo=EASTERN))]
+
+    catalog = build_browse_catalog(wishlist, recent, recent_limit=2)
+    recent_items = [item for item in catalog if item["source"] == "warhorn"]
+
+    assert [item["adventure"] for item in recent_items] == ["Wishlisted 0", "Wishlisted 1"]
+    assert resolve_wishlist_number(catalog, 4) == "Wishlisted 0"
+
+
+def test_build_player_wishlists_groups_by_user_with_newest_name():
+    entries = [
+        {"discord_user_id": 2, "adventure": "Spider Hunt", "display_name": "Ken (Keno)",
+         "created_at": datetime(2026, 9, 1)},
+        {"discord_user_id": 1, "adventure": "Endless Glory", "display_name": "Michael",
+         "created_at": datetime(2026, 8, 1)},
+        {"discord_user_id": 2, "adventure": "Endless Revel", "display_name": "Ken (Poweye)",
+         "created_at": datetime(2026, 7, 1)},
+    ]
+
+    players = build_player_wishlists(entries)
+
+    assert [(p["display_name"], p["adventures"]) for p in players] == [
+        ("Ken (Keno)", ["Endless Revel", "Spider Hunt"]),
+        ("Michael", ["Endless Glory"]),
+    ]
+    text = format_player_wishlists(players)
+    assert text == "**Ken (Keno)**\n• Endless Revel\n• Spider Hunt\n\n**Michael**\n• Endless Glory"
+    assert format_player_wishlists([]) == "*No wishlist entries yet.*"
 
 
 def test_format_browse_catalog_uses_continuous_numbering():
