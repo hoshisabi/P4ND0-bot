@@ -316,8 +316,13 @@
       "matched": true
     },
     {
-      "name": "FR-DC-LOOSE-01 Spells on the Loose",
+      "name": "FR-DC-LOOSE-001 Spells on the Loose",
       "file": "FR-DC-LOOSE-001 Spells on the Loose.zip",
+      "matched": true
+    },
+    {
+      "name": "FR-DC-LOOSE-002 Spells Gone Wild",
+      "file": "FR-DC-LOOSE-002 Spells Gone Wild.zip",
       "matched": true
     },
     {
