@@ -10,7 +10,7 @@ attrs==25.4.0
     # via aiohttp
 audioop-lts==0.2.2 ; python_full_version >= '3.13'
     # via discord-py
-certifi==2026.2.25
+certifi==2026.10.19
     # via requests
 charset-normalizer==3.4.5
     # via requests
