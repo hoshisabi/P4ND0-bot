@@ -44,6 +44,10 @@ query EventSessions($events: [String!]!, $startsAfter: ISO8601DateTime, $startsB
           name
         }
       }
+      virtualTableTops {
+        name
+        connectionUrl
+      }
       scenario {
         name
         externalUrl
@@ -148,6 +152,15 @@ def format_obs_copy(session: dict) -> str:
     if external_url:
         lines.append(shorten_dmsguild_url(external_url))
     return "\n".join(lines)
+
+def format_play_location(session: dict) -> str | None:
+    """Markdown links to the session's virtual tabletops, or None if Warhorn lists none."""
+    links = []
+    for vtt in session.get("virtualTableTops") or []:
+        url = vtt.get("connectionUrl")
+        if url:
+            links.append(f"[{vtt.get('name') or 'Virtual tabletop'}]({url})")
+    return ", ".join(links) or None
 
 class WarhornClient:
     def __init__(self, api_endpoint, app_token):

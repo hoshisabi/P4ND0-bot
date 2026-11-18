@@ -5,6 +5,7 @@ from utils.session_format import build_gotime_embed, format_player_lines
 from utils.warhorn_api import (
     find_current_session,
     format_obs_copy,
+    format_play_location,
     shorten_dmsguild_url,
     OBS_TITLE_PREFIX,
 )
@@ -144,6 +145,50 @@ def test_build_gotime_embed_lists_players():
     player_field = next(field for field in embed.fields if field.name.startswith("Players"))
     assert "Alice" in player_field.value
     assert embed.footer.text.startswith("Preview only")
+
+
+def test_format_play_location_links_each_vtt():
+    session = {
+        "virtualTableTops": [
+            {"name": "D&D Beyond Maps", "connectionUrl": "https://www.dndbeyond.com/campaigns/join/123"},
+            {"name": "Unlinked VTT", "connectionUrl": None},
+            {"name": None, "connectionUrl": "https://example.com/vtt"},
+        ],
+    }
+
+    assert format_play_location(session) == (
+        "[D&D Beyond Maps](https://www.dndbeyond.com/campaigns/join/123), "
+        "[Virtual tabletop](https://example.com/vtt)"
+    )
+
+
+def test_format_play_location_without_vtt_is_none():
+    assert format_play_location({}) is None
+    assert format_play_location({"virtualTableTops": []}) is None
+
+
+def test_build_gotime_embed_shows_where_field():
+    session = {
+        "id": "session-1",
+        "name": "Tonight's Game",
+        "startsAt": "2026-06-10T23:00:00Z",
+        "virtualTableTops": [
+            {"name": "D&D Beyond Maps", "connectionUrl": "https://www.dndbeyond.com/campaigns/join/123"},
+        ],
+    }
+
+    embed = build_gotime_embed(session, [], preview=True)
+
+    where = next(field for field in embed.fields if field.name == "Where")
+    assert where.value == "[D&D Beyond Maps](https://www.dndbeyond.com/campaigns/join/123)"
+
+
+def test_build_gotime_embed_omits_where_without_vtt():
+    session = {"id": "session-1", "name": "Tonight's Game", "startsAt": "2026-06-10T23:00:00Z"}
+
+    embed = build_gotime_embed(session, [], preview=True)
+
+    assert all(field.name != "Where" for field in embed.fields)
 
 
 def test_format_player_lines_marks_unknown_characters():

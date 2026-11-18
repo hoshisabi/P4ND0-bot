@@ -10,7 +10,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from utils import db
 from utils.log import log
-from utils.warhorn_api import WarhornClient
+from utils.warhorn_api import WarhornClient, format_play_location
 
 class Warhorn(commands.Cog):
     def __init__(self, bot):
@@ -166,6 +166,9 @@ class Warhorn(commands.Cog):
                 session_block = f"**[{session_name}]({warhorn_url})**  \n"
                 session_block += f"* 📅 **When:** {time_str}  \n"
                 session_block += f"* 🧙‍ **GM:** ️ {gm_name}  \n"
+                play_location = format_play_location(session)
+                if play_location:
+                    session_block += f"* 🗺️ **Where:** {play_location}  \n"
                 session_block += f"* 👥 **Players:** {players_list_str}  \n"
                 session_block += f"{status_line}  \n\n"
                 

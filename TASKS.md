@@ -14,6 +14,7 @@
 ### 3. Session Tracking & DM Logging
 - [ ] **Implement SessionTracker:** Compare current heartbeat with the last one to detect games "starting" (start time between heartbeats).
 - [ ] **Game Starting Announcement:** Post a "starting" message in the channel using the Warhorn scenario image.
+    - Include the play location link (`format_play_location` in `utils/warhorn_api.py`), as `/schedule`, `/watch` and `/gotime` already do. The links come from Warhorn's `virtualTableTops.connectionUrl`; posting them publicly is intended (Warhorn marks the location non-public, the links get rotated).
 - [ ] **Automated Reward Generation:**
     - [ ] Create `/logsession` slash command with parameters: `adventure_name`, `gold_reward`, `streaming_hours`, `items_received`.
     - [ ] **Player Scraping:** Automatically pull list of players from the current channel (Discord member list).

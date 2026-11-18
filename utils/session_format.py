@@ -1,6 +1,6 @@
 import discord
 
-from utils.warhorn_api import format_obs_copy, parse_warhorn_dt
+from utils.warhorn_api import format_obs_copy, format_play_location, parse_warhorn_dt
 
 
 def format_player_lines(players: list[dict]) -> tuple[list[str], list[str]]:
@@ -31,6 +31,10 @@ def build_gotime_embed(
         color=discord.Color.blue() if preview else discord.Color.green(),
     )
     embed.add_field(name="When", value=f"<t:{unix_ts}:F>", inline=False)
+
+    play_location = format_play_location(session)
+    if play_location:
+        embed.add_field(name="Where", value=play_location, inline=False)
 
     lines, unknown = format_player_lines(player_data)
     embed.add_field(name=f"Players ({len(player_data)})", value="\n".join(lines), inline=False)
